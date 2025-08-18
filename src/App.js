@@ -151,8 +151,42 @@ const ClassroomTracker = () => {
     }
   };
 
+  // Compress image before storing
+  const compressImage = (file, maxWidth = 200, quality = 0.7) => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        // Calculate new dimensions maintaining aspect ratio
+        const ratio = Math.min(maxWidth / img.width, maxWidth / img.height);
+        canvas.width = img.width * ratio;
+        canvas.height = img.height * ratio;
+        
+        // Draw and compress
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressedDataUrl);
+      };
+      
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  // Check localStorage size
+  const getStorageSize = () => {
+    let total = 0;
+    for (let key in localStorage) {
+      if (localStorage.hasOwnProperty(key)) {
+        total += localStorage[key].length + key.length;
+      }
+    }
+    return total;
+  };
+
   // Upload custom profile picture
-  const uploadProfilePic = (studentIndex, event) => {
+  const uploadProfilePic = async (studentIndex, event) => {
     const file = event.target.files[0];
     if (!file || !currentClass) return;
     
@@ -162,16 +196,28 @@ const ClassroomTracker = () => {
       return;
     }
     
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Image must be smaller than 5MB');
+    // Validate file size (max 10MB original)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image must be smaller than 10MB');
       return;
     }
     
-    const reader = new FileReader();
-    reader.onload = (e) => {
+    try {
+      // Compress the image
+      const compressedImage = await compressImage(file, 200, 0.6);
+      
+      // Check if adding this image would exceed storage
+      const estimatedSize = compressedImage.length;
+      const currentSize = getStorageSize();
+      const maxSize = 5 * 1024 * 1024; // 5MB localStorage limit (conservative)
+      
+      if (currentSize + estimatedSize > maxSize) {
+        alert('Storage full! Try removing some custom photos or use smaller images.');
+        return;
+      }
+      
       const updatedStudents = [...students];
-      updatedStudents[studentIndex].avatar = e.target.result;
+      updatedStudents[studentIndex].avatar = compressedImage;
       updatedStudents[studentIndex].hasCustomAvatar = true;
       
       const updatedClasses = {
@@ -184,8 +230,11 @@ const ClassroomTracker = () => {
       
       setStudents(updatedStudents);
       saveData(updatedClasses);
-    };
-    reader.readAsDataURL(file);
+      
+    } catch (error) {
+      console.error('Error processing image:', error);
+      alert('Failed to process image. Please try a different photo.');
+    }
     
     // Reset the input
     event.target.value = '';
@@ -346,6 +395,10 @@ const ClassroomTracker = () => {
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <Calendar size={16} />
                 Week: {currentWeek}
+              </div>
+              
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                📊 Storage: {Math.round(getStorageSize() / 1024)}KB used
               </div>
               
               <label className="px-4 py-2 bg-green-600 text-white rounded-md cursor-pointer hover:bg-green-700 flex items-center gap-2">
