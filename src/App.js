@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Minus, Download, Upload, RotateCcw, Users, Calendar, Camera, UserPlus, Trash2, X } from 'lucide-react';
+import { Plus, Minus, Download, Upload, RotateCcw, Users, Calendar, Camera, UserPlus, Trash2, X, ChevronUp, ChevronDown, Settings } from 'lucide-react';
 
 const ClassroomTracker = () => {
   const [classes, setClasses] = useState({});
@@ -9,12 +9,15 @@ const ClassroomTracker = () => {
   const [newClassName, setNewClassName] = useState('');
   const [newStudentName, setNewStudentName] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [controlsMinimized, setControlsMinimized] = useState(false); // New state for minimizing controls
   const fileInputRefs = useRef({});
 
   // Initialize data and current week
   useEffect(() => {
     const savedData = JSON.parse(localStorage.getItem('classroomData') || '{}');
+    const savedMinimized = JSON.parse(localStorage.getItem('controlsMinimized') || 'false');
     setClasses(savedData);
+    setControlsMinimized(savedMinimized);
     
     const weekKey = getWeekKey();
     setCurrentWeek(weekKey);
@@ -22,6 +25,13 @@ const ClassroomTracker = () => {
     // Auto-reset if new week
     checkAndResetWeek(savedData, weekKey);
   }, []);
+
+  // Save minimized state to localStorage
+  const toggleControls = () => {
+    const newMinimizedState = !controlsMinimized;
+    setControlsMinimized(newMinimizedState);
+    localStorage.setItem('controlsMinimized', JSON.stringify(newMinimizedState));
+  };
 
   // Get current week key (year-week format)
   const getWeekKey = () => {
@@ -314,6 +324,7 @@ const ClassroomTracker = () => {
     setStudents(updatedStudents);
     saveData(updatedClasses);
   };
+
   const importCSV = (event) => {
     const file = event.target.files[0];
     if (!file || !currentClass) return;
@@ -405,112 +416,149 @@ const ClassroomTracker = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h1 className="text-3xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <Users className="text-blue-600" />
-            Classroom Participation Tracker
-          </h1>
-          
-          {/* Class Management */}
-          <div className="flex flex-wrap gap-4 items-center mb-4">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="New class name"
-                value={newClassName}
-                onChange={(e) => setNewClassName(e.target.value)}
-                className="px-3 py-2 border rounded-md"
-                onKeyPress={(e) => e.key === 'Enter' && createClass()}
-              />
+        {/* Header - Now Collapsible */}
+        <div className={`bg-white rounded-lg shadow-md transition-all duration-300 ease-in-out ${controlsMinimized ? 'mb-3' : 'mb-6'}`}>
+          {/* Always Visible Header Bar */}
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <h1 className={`font-bold text-gray-800 flex items-center gap-2 transition-all duration-300 ${controlsMinimized ? 'text-xl' : 'text-3xl'}`}>
+                  <Users className="text-blue-600" />
+                  {controlsMinimized ? 'Tracker' : 'Classroom Participation Tracker'}
+                </h1>
+                
+                {/* Minimized Info Display */}
+                {controlsMinimized && currentClass && (
+                  <div className="flex items-center gap-4 text-sm text-gray-600">
+                    <span className="font-medium text-blue-600">{currentClass}</span>
+                    <span className="flex items-center gap-1">
+                      <Calendar size={14} />
+                      {currentWeek}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Users size={14} />
+                      {students.length} students
+                    </span>
+                  </div>
+                )}
+              </div>
+              
+              {/* Toggle Button */}
               <button
-                onClick={createClass}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                onClick={toggleControls}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex items-center gap-2 text-gray-600 hover:text-gray-800"
+                title={controlsMinimized ? 'Show controls' : 'Hide controls'}
               >
-                Create Class
+                <Settings size={16} />
+                {controlsMinimized ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
               </button>
             </div>
-            
-            <select
-              value={currentClass}
-              onChange={(e) => setCurrentClass(e.target.value)}
-              className="px-3 py-2 border rounded-md"
-            >
-              <option value="">Select a class...</option>
-              {Object.keys(classes).map(className => (
-                <option key={className} value={className}>{className}</option>
-              ))}
-            </select>
           </div>
 
-          {/* Controls */}
-          {currentClass && (
-            <div className="space-y-4">
-              {/* Add Student Section */}
-              <div className="flex flex-wrap gap-3 items-center p-3 bg-gray-50 rounded-lg">
+          {/* Collapsible Content */}
+          <div className={`overflow-hidden transition-all duration-300 ease-in-out ${controlsMinimized ? 'max-h-0' : 'max-h-96'}`}>
+            <div className="p-6 pt-4">
+              {/* Class Management */}
+              <div className="flex flex-wrap gap-4 items-center mb-4">
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="Student name"
-                    value={newStudentName}
-                    onChange={(e) => setNewStudentName(e.target.value)}
+                    placeholder="New class name"
+                    value={newClassName}
+                    onChange={(e) => setNewClassName(e.target.value)}
                     className="px-3 py-2 border rounded-md"
-                    onKeyPress={(e) => e.key === 'Enter' && addStudent()}
+                    onKeyPress={(e) => e.key === 'Enter' && createClass()}
                   />
                   <button
-                    onClick={addStudent}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
+                    onClick={createClass}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                   >
-                    <UserPlus size={16} />
-                    Add Student
+                    Create Class
                   </button>
                 </div>
                 
-                <div className="text-sm text-gray-600">
-                  Students: {students.length}/30
-                </div>
-              </div>
-              
-              {/* Main Controls */}
-              <div className="flex flex-wrap gap-3 items-center">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Calendar size={16} />
-                  Week: {currentWeek}
-                </div>
-                
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  📊 Storage: {Math.round(getStorageSize() / 1024)}KB used
-                </div>
-                
-                <label className="px-4 py-2 bg-green-600 text-white rounded-md cursor-pointer hover:bg-green-700 flex items-center gap-2">
-                  <Upload size={16} />
-                  Import CSV
-                  <input
-                    type="file"
-                    accept=".csv"
-                    onChange={importCSV}
-                    className="hidden"
-                  />
-                </label>
-                
-                <button
-                  onClick={exportCSV}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center gap-2"
+                <select
+                  value={currentClass}
+                  onChange={(e) => setCurrentClass(e.target.value)}
+                  className="px-3 py-2 border rounded-md"
                 >
-                  <Download size={16} />
-                  Export CSV
-                </button>
-                
-                <button
-                  onClick={resetWeek}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2"
-                >
-                  <RotateCcw size={16} />
-                  Reset Week
-                </button>
+                  <option value="">Select a class...</option>
+                  {Object.keys(classes).map(className => (
+                    <option key={className} value={className}>{className}</option>
+                  ))}
+                </select>
               </div>
+
+              {/* Controls */}
+              {currentClass && (
+                <div className="space-y-4">
+                  {/* Add Student Section */}
+                  <div className="flex flex-wrap gap-3 items-center p-3 bg-gray-50 rounded-lg">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Student name"
+                        value={newStudentName}
+                        onChange={(e) => setNewStudentName(e.target.value)}
+                        className="px-3 py-2 border rounded-md"
+                        onKeyPress={(e) => e.key === 'Enter' && addStudent()}
+                      />
+                      <button
+                        onClick={addStudent}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
+                      >
+                        <UserPlus size={16} />
+                        Add Student
+                      </button>
+                    </div>
+                    
+                    <div className="text-sm text-gray-600">
+                      Students: {students.length}/30
+                    </div>
+                  </div>
+                  
+                  {/* Main Controls */}
+                  <div className="flex flex-wrap gap-3 items-center">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Calendar size={16} />
+                      Week: {currentWeek}
+                    </div>
+                    
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      📊 Storage: {Math.round(getStorageSize() / 1024)}KB used
+                    </div>
+                    
+                    <label className="px-4 py-2 bg-green-600 text-white rounded-md cursor-pointer hover:bg-green-700 flex items-center gap-2">
+                      <Upload size={16} />
+                      Import CSV
+                      <input
+                        type="file"
+                        accept=".csv"
+                        onChange={importCSV}
+                        className="hidden"
+                      />
+                    </label>
+                    
+                    <button
+                      onClick={exportCSV}
+                      className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center gap-2"
+                    >
+                      <Download size={16} />
+                      Export CSV
+                    </button>
+                    
+                    <button
+                      onClick={resetWeek}
+                      className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2"
+                    >
+                      <RotateCcw size={16} />
+                      Reset Week
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
         {/* Students Grid */}
@@ -518,11 +566,11 @@ const ClassroomTracker = () => {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
               {students.map((student, index) => (
-                <div key={student.id} className="bg-white rounded-lg shadow-md p-4 text-center relative">
+                <div key={student.id} className="bg-white rounded-lg shadow-md p-4 text-center relative group">
                   {/* Delete Button */}
                   <button
                     onClick={() => deleteStudent(index)}
-                    className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full hover:bg-red-600 flex items-center justify-center text-xs opacity-0 hover:opacity-100 transition-opacity group-hover:opacity-100"
+                    className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full hover:bg-red-600 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Delete student"
                   >
                     <Trash2 size={12} />
