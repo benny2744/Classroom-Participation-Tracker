@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Minus, Download, Upload, RotateCcw, Users, Calendar } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Minus, Download, Upload, RotateCcw, Users, Calendar, Camera } from 'lucide-react';
 
 const ClassroomTracker = () => {
   const [classes, setClasses] = useState({});
@@ -7,6 +7,7 @@ const ClassroomTracker = () => {
   const [students, setStudents] = useState([]);
   const [currentWeek, setCurrentWeek] = useState('');
   const [newClassName, setNewClassName] = useState('');
+  const fileInputRefs = useRef({});
 
   // Initialize data and current week
   useEffect(() => {
@@ -150,7 +151,66 @@ const ClassroomTracker = () => {
     }
   };
 
-  // Import CSV
+  // Upload custom profile picture
+  const uploadProfilePic = (studentIndex, event) => {
+    const file = event.target.files[0];
+    if (!file || !currentClass) return;
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload an image file');
+      return;
+    }
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be smaller than 5MB');
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const updatedStudents = [...students];
+      updatedStudents[studentIndex].avatar = e.target.result;
+      updatedStudents[studentIndex].hasCustomAvatar = true;
+      
+      const updatedClasses = {
+        ...classes,
+        [currentClass]: {
+          ...classes[currentClass],
+          students: updatedStudents
+        }
+      };
+      
+      setStudents(updatedStudents);
+      saveData(updatedClasses);
+    };
+    reader.readAsDataURL(file);
+    
+    // Reset the input
+    event.target.value = '';
+  };
+
+  // Reset to default avatar
+  const resetToDefaultAvatar = (studentIndex) => {
+    if (!currentClass) return;
+    
+    const updatedStudents = [...students];
+    const student = updatedStudents[studentIndex];
+    updatedStudents[studentIndex].avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${student.name}`;
+    updatedStudents[studentIndex].hasCustomAvatar = false;
+    
+    const updatedClasses = {
+      ...classes,
+      [currentClass]: {
+        ...classes[currentClass],
+        students: updatedStudents
+      }
+    };
+    
+    setStudents(updatedStudents);
+    saveData(updatedClasses);
+  };
   const importCSV = (event) => {
     const file = event.target.files[0];
     if (!file || !currentClass) return;
@@ -323,11 +383,42 @@ const ClassroomTracker = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
             {students.map((student, index) => (
               <div key={student.id} className="bg-white rounded-lg shadow-md p-4 text-center">
-                <img
-                  src={student.avatar}
-                  alt={student.name}
-                  className="w-16 h-16 rounded-full mx-auto mb-3 bg-gray-100"
-                />
+                {/* Profile Picture with Upload */}
+                <div className="relative group mb-3">
+                  <img
+                    src={student.avatar}
+                    alt={student.name}
+                    className="w-16 h-16 rounded-full mx-auto bg-gray-100 object-cover"
+                  />
+                  
+                  {/* Upload overlay - appears on hover */}
+                  <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                    <Camera size={20} className="text-white" />
+                  </div>
+                  
+                  {/* Hidden file input */}
+                  <input
+                    ref={el => fileInputRefs.current[student.id] = el}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => uploadProfilePic(index, e)}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  
+                  {/* Reset button for custom avatars */}
+                  {student.hasCustomAvatar && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        resetToDefaultAvatar(index);
+                      }}
+                      className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center"
+                      title="Reset to default avatar"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
                 
                 <h3 className="font-semibold text-gray-800 mb-2 text-sm truncate">
                   {student.name}
