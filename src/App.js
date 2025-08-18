@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Minus, Download, Upload, RotateCcw, Users, Calendar, Camera, UserPlus, Trash2, X, ChevronUp, ChevronDown, Settings } from 'lucide-react';
+import { Plus, Minus, Download, Upload, RotateCcw, Users, Calendar, Camera, UserPlus, Trash2, X, ChevronUp, ChevronDown, Settings, Shuffle, Target } from 'lucide-react';
 
 const ClassroomTracker = () => {
   const [classes, setClasses] = useState({});
@@ -9,15 +9,19 @@ const ClassroomTracker = () => {
   const [newClassName, setNewClassName] = useState('');
   const [newStudentName, setNewStudentName] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
-  const [controlsMinimized, setControlsMinimized] = useState(false); // New state for minimizing controls
+  const [controlsMinimized, setControlsMinimized] = useState(false);
+  const [toolsMinimized, setToolsMinimized] = useState(false);
+  const [selectedStudentIndex, setSelectedStudentIndex] = useState(null);
   const fileInputRefs = useRef({});
 
   // Initialize data and current week
   useEffect(() => {
     const savedData = JSON.parse(localStorage.getItem('classroomData') || '{}');
     const savedMinimized = JSON.parse(localStorage.getItem('controlsMinimized') || 'false');
+    const savedToolsMinimized = JSON.parse(localStorage.getItem('toolsMinimized') || 'false');
     setClasses(savedData);
     setControlsMinimized(savedMinimized);
+    setToolsMinimized(savedToolsMinimized);
     
     const weekKey = getWeekKey();
     setCurrentWeek(weekKey);
@@ -31,6 +35,37 @@ const ClassroomTracker = () => {
     const newMinimizedState = !controlsMinimized;
     setControlsMinimized(newMinimizedState);
     localStorage.setItem('controlsMinimized', JSON.stringify(newMinimizedState));
+  };
+
+  // Save tools minimized state to localStorage
+  const toggleTools = () => {
+    const newToolsMinimizedState = !toolsMinimized;
+    setToolsMinimized(newToolsMinimizedState);
+    localStorage.setItem('toolsMinimized', JSON.stringify(newToolsMinimizedState));
+  };
+
+  // Randomly select a student
+  const selectRandomStudent = () => {
+    if (students.length === 0) {
+      alert('No students available to select!');
+      return;
+    }
+    
+    const randomIndex = Math.floor(Math.random() * students.length);
+    setSelectedStudentIndex(randomIndex);
+    
+    // Auto-scroll to the selected student
+    setTimeout(() => {
+      const studentCard = document.querySelector(`[data-student-index="${randomIndex}"]`);
+      if (studentCard) {
+        studentCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+  };
+
+  // Clear selection
+  const clearSelection = () => {
+    setSelectedStudentIndex(null);
   };
 
   // Get current week key (year-week format)
@@ -71,6 +106,8 @@ const ClassroomTracker = () => {
     } else {
       setStudents([]);
     }
+    // Clear selection when class changes
+    setSelectedStudentIndex(null);
   }, [currentClass, classes]);
 
   // Save data to localStorage
@@ -167,6 +204,14 @@ const ClassroomTracker = () => {
 
   const confirmDeleteStudent = () => {
     if (showDeleteConfirm === null || !currentClass) return;
+    
+    // Clear selection if the selected student is being deleted
+    if (selectedStudentIndex === showDeleteConfirm) {
+      setSelectedStudentIndex(null);
+    } else if (selectedStudentIndex !== null && selectedStudentIndex > showDeleteConfirm) {
+      // Adjust selection index if a student before the selected one is deleted
+      setSelectedStudentIndex(selectedStudentIndex - 1);
+    }
     
     const updatedStudents = students.filter((_, index) => index !== showDeleteConfirm);
     const updatedClasses = {
@@ -355,6 +400,8 @@ const ClassroomTracker = () => {
       
       setStudents(importedStudents);
       saveData(updatedClasses);
+      // Clear selection when importing new students
+      setSelectedStudentIndex(null);
     };
     reader.readAsText(file);
     event.target.value = '';
@@ -416,7 +463,7 @@ const ClassroomTracker = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto">
-        {/* Header - Now Collapsible */}
+        {/* Header - Collapsible */}
         <div className={`bg-white rounded-lg shadow-md transition-all duration-300 ease-in-out ${controlsMinimized ? 'mb-3' : 'mb-6'}`}>
           {/* Always Visible Header Bar */}
           <div className="p-4 border-b border-gray-200">
@@ -561,12 +608,106 @@ const ClassroomTracker = () => {
           </div>
         </div>
 
+        {/* Tools Section - Collapsible */}
+        {currentClass && (
+          <div className={`bg-white rounded-lg shadow-md transition-all duration-300 ease-in-out ${toolsMinimized ? 'mb-3' : 'mb-6'}`}>
+            {/* Tools Header Bar */}
+            <div className="p-4 border-b border-gray-200">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <h2 className={`font-semibold text-gray-700 flex items-center gap-2 transition-all duration-300 ${toolsMinimized ? 'text-lg' : 'text-xl'}`}>
+                    <Target className="text-purple-600" />
+                    Tools
+                  </h2>
+                  
+                  {/* Minimized Tools Info */}
+                  {toolsMinimized && (
+                    <div className="flex items-center gap-3 text-sm text-gray-600">
+                      <span>Random selection available</span>
+                      {selectedStudentIndex !== null && (
+                        <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs font-medium">
+                          {students[selectedStudentIndex]?.name} selected
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Tools Toggle Button */}
+                <button
+                  onClick={toggleTools}
+                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex items-center gap-2 text-gray-600 hover:text-gray-800"
+                  title={toolsMinimized ? 'Show tools' : 'Hide tools'}
+                >
+                  <Target size={16} />
+                  {toolsMinimized ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Collapsible Tools Content */}
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${toolsMinimized ? 'max-h-0' : 'max-h-96'}`}>
+              <div className="p-6 pt-4">
+                <div className="flex flex-wrap gap-3 items-center">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mr-4">
+                    <Shuffle size={16} />
+                    Student Selection:
+                  </div>
+                  
+                  <button
+                    onClick={selectRandomStudent}
+                    disabled={students.length === 0}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 transition-colors duration-200"
+                  >
+                    <Shuffle size={16} />
+                    Random Student
+                  </button>
+                  
+                  {selectedStudentIndex !== null && (
+                    <button
+                      onClick={clearSelection}
+                      className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 flex items-center gap-2 transition-colors duration-200"
+                    >
+                      <X size={16} />
+                      Clear Selection
+                    </button>
+                  )}
+                  
+                  {selectedStudentIndex !== null && (
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 flex items-center gap-2">
+                      <Target size={16} className="text-purple-600" />
+                      <span className="text-purple-700 font-medium">
+                        Selected: {students[selectedStudentIndex]?.name}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Students Grid */}
         {currentClass ? (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
               {students.map((student, index) => (
-                <div key={student.id} className="bg-white rounded-lg shadow-md p-4 text-center relative group">
+                <div 
+                  key={student.id} 
+                  data-student-index={index}
+                  className={`bg-white rounded-lg shadow-md p-4 text-center relative group transition-all duration-300 ${
+                    selectedStudentIndex === index 
+                      ? 'ring-4 ring-purple-400 ring-opacity-75 bg-purple-50 shadow-lg transform scale-105' 
+                      : 'hover:shadow-lg'
+                  }`}
+                >
+                  {/* Selection Indicator */}
+                  {selectedStudentIndex === index && (
+                    <div className="absolute -top-2 -right-2 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg animate-pulse">
+                      <Target size={16} />
+                    </div>
+                  )}
+                  
                   {/* Delete Button */}
                   <button
                     onClick={() => deleteStudent(index)}
