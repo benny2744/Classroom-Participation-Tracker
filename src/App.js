@@ -124,6 +124,58 @@ const ClassroomTracker = () => {
     saveData(updatedClasses);
   };
 
+  // Add new student
+  const addStudent = () => {
+    if (!newStudentName.trim() || !currentClass) return;
+    
+    const newStudent = {
+      id: Date.now(), // Use timestamp as unique ID
+      name: newStudentName.trim(),
+      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${newStudentName.trim()}`,
+      hasCustomAvatar: false,
+      points: 0
+    };
+    
+    const updatedStudents = [...students, newStudent];
+    const updatedClasses = {
+      ...classes,
+      [currentClass]: {
+        ...classes[currentClass],
+        students: updatedStudents
+      }
+    };
+    
+    setStudents(updatedStudents);
+    saveData(updatedClasses);
+    setNewStudentName('');
+  };
+
+  // Delete student with confirmation
+  const deleteStudent = (studentIndex) => {
+    setShowDeleteConfirm(studentIndex);
+  };
+
+  const confirmDeleteStudent = () => {
+    if (showDeleteConfirm === null || !currentClass) return;
+    
+    const updatedStudents = students.filter((_, index) => index !== showDeleteConfirm);
+    const updatedClasses = {
+      ...classes,
+      [currentClass]: {
+        ...classes[currentClass],
+        students: updatedStudents
+      }
+    };
+    
+    setStudents(updatedStudents);
+    saveData(updatedClasses);
+    setShowDeleteConfirm(null);
+  };
+
+  const cancelDeleteStudent = () => {
+    setShowDeleteConfirm(null);
+  };
+
   // Generate CSV
   const exportCSV = () => {
     if (!students.length) {
