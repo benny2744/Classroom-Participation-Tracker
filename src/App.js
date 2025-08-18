@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Minus, Download, Upload, RotateCcw, Users, Calendar, Camera } from 'lucide-react';
+import { Plus, Minus, Download, Upload, RotateCcw, Users, Calendar, Camera, UserPlus, Trash2, X } from 'lucide-react';
 
 const ClassroomTracker = () => {
   const [classes, setClasses] = useState({});
@@ -7,6 +7,8 @@ const ClassroomTracker = () => {
   const [students, setStudents] = useState([]);
   const [currentWeek, setCurrentWeek] = useState('');
   const [newClassName, setNewClassName] = useState('');
+  const [newStudentName, setNewStudentName] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const fileInputRefs = useRef({});
 
   // Initialize data and current week
@@ -391,123 +393,203 @@ const ClassroomTracker = () => {
 
           {/* Controls */}
           {currentClass && (
-            <div className="flex flex-wrap gap-3 items-center">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Calendar size={16} />
-                Week: {currentWeek}
+            <div className="space-y-4">
+              {/* Add Student Section */}
+              <div className="flex flex-wrap gap-3 items-center p-3 bg-gray-50 rounded-lg">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Student name"
+                    value={newStudentName}
+                    onChange={(e) => setNewStudentName(e.target.value)}
+                    className="px-3 py-2 border rounded-md"
+                    onKeyPress={(e) => e.key === 'Enter' && addStudent()}
+                  />
+                  <button
+                    onClick={addStudent}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
+                  >
+                    <UserPlus size={16} />
+                    Add Student
+                  </button>
+                </div>
+                
+                <div className="text-sm text-gray-600">
+                  Students: {students.length}/30
+                </div>
               </div>
               
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                📊 Storage: {Math.round(getStorageSize() / 1024)}KB used
+              {/* Main Controls */}
+              <div className="flex flex-wrap gap-3 items-center">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Calendar size={16} />
+                  Week: {currentWeek}
+                </div>
+                
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  📊 Storage: {Math.round(getStorageSize() / 1024)}KB used
+                </div>
+                
+                <label className="px-4 py-2 bg-green-600 text-white rounded-md cursor-pointer hover:bg-green-700 flex items-center gap-2">
+                  <Upload size={16} />
+                  Import CSV
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={importCSV}
+                    className="hidden"
+                  />
+                </label>
+                
+                <button
+                  onClick={exportCSV}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center gap-2"
+                >
+                  <Download size={16} />
+                  Export CSV
+                </button>
+                
+                <button
+                  onClick={resetWeek}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2"
+                >
+                  <RotateCcw size={16} />
+                  Reset Week
+                </button>
               </div>
-              
-              <label className="px-4 py-2 bg-green-600 text-white rounded-md cursor-pointer hover:bg-green-700 flex items-center gap-2">
-                <Upload size={16} />
-                Import CSV
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={importCSV}
-                  className="hidden"
-                />
-              </label>
-              
-              <button
-                onClick={exportCSV}
-                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center gap-2"
-              >
-                <Download size={16} />
-                Export CSV
-              </button>
-              
-              <button
-                onClick={resetWeek}
-                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2"
-              >
-                <RotateCcw size={16} />
-                Reset Week
-              </button>
             </div>
           )}
         </div>
 
         {/* Students Grid */}
         {currentClass ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
-            {students.map((student, index) => (
-              <div key={student.id} className="bg-white rounded-lg shadow-md p-4 text-center">
-                {/* Profile Picture with Upload */}
-                <div className="relative group mb-3">
-                  <img
-                    src={student.avatar}
-                    alt={student.name}
-                    className="w-16 h-16 rounded-full mx-auto bg-gray-100 object-cover"
-                  />
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+              {students.map((student, index) => (
+                <div key={student.id} className="bg-white rounded-lg shadow-md p-4 text-center relative">
+                  {/* Delete Button */}
+                  <button
+                    onClick={() => deleteStudent(index)}
+                    className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full hover:bg-red-600 flex items-center justify-center text-xs opacity-0 hover:opacity-100 transition-opacity group-hover:opacity-100"
+                    title="Delete student"
+                  >
+                    <Trash2 size={12} />
+                  </button>
                   
-                  {/* Upload overlay - appears on hover */}
-                  <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
-                    <Camera size={20} className="text-white" />
+                  {/* Profile Picture with Upload */}
+                  <div className="relative group mb-3">
+                    <img
+                      src={student.avatar}
+                      alt={student.name}
+                      className="w-16 h-16 rounded-full mx-auto bg-gray-100 object-cover"
+                    />
+                    
+                    {/* Upload overlay - appears on hover */}
+                    <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                      <Camera size={20} className="text-white" />
+                    </div>
+                    
+                    {/* Hidden file input */}
+                    <input
+                      ref={el => fileInputRefs.current[student.id] = el}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => uploadProfilePic(index, e)}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    
+                    {/* Reset button for custom avatars */}
+                    {student.hasCustomAvatar && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          resetToDefaultAvatar(index);
+                        }}
+                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center"
+                        title="Reset to default avatar"
+                      >
+                        ×
+                      </button>
+                    )}
                   </div>
                   
-                  {/* Hidden file input */}
-                  <input
-                    ref={el => fileInputRefs.current[student.id] = el}
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => uploadProfilePic(index, e)}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
+                  <h3 className="font-semibold text-gray-800 mb-2 text-sm truncate">
+                    {student.name}
+                  </h3>
                   
-                  {/* Reset button for custom avatars */}
-                  {student.hasCustomAvatar && (
+                  {/* Participation Lights */}
+                  <div className="flex justify-center gap-1 mb-3">
+                    {renderLights(student.points)}
+                  </div>
+                  
+                  {/* Points Display */}
+                  <div className="text-lg font-bold text-gray-700 mb-3">
+                    {student.points}/20
+                  </div>
+                  
+                  {/* Control Buttons */}
+                  <div className="flex gap-2 justify-center">
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        resetToDefaultAvatar(index);
-                      }}
-                      className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center"
-                      title="Reset to default avatar"
+                      onClick={() => updatePoints(index, -1)}
+                      disabled={student.points === 0}
+                      className="w-8 h-8 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:bg-gray-300 flex items-center justify-center"
                     >
-                      ×
+                      <Minus size={14} />
                     </button>
-                  )}
+                    
+                    <button
+                      onClick={() => updatePoints(index, 1)}
+                      disabled={student.points === 20}
+                      className="w-8 h-8 bg-green-500 text-white rounded-full hover:bg-green-600 disabled:bg-gray-300 flex items-center justify-center"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
                 </div>
-                
-                <h3 className="font-semibold text-gray-800 mb-2 text-sm truncate">
-                  {student.name}
-                </h3>
-                
-                {/* Participation Lights */}
-                <div className="flex justify-center gap-1 mb-3">
-                  {renderLights(student.points)}
-                </div>
-                
-                {/* Points Display */}
-                <div className="text-lg font-bold text-gray-700 mb-3">
-                  {student.points}/20
-                </div>
-                
-                {/* Control Buttons */}
-                <div className="flex gap-2 justify-center">
-                  <button
-                    onClick={() => updatePoints(index, -1)}
-                    disabled={student.points === 0}
-                    className="w-8 h-8 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:bg-gray-300 flex items-center justify-center"
-                  >
-                    <Minus size={14} />
-                  </button>
+              ))}
+            </div>
+
+            {/* Delete Confirmation Modal */}
+            {showDeleteConfirm !== null && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 max-w-md mx-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                      <Trash2 className="text-red-600" size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Delete Student</h3>
+                      <p className="text-sm text-gray-600">This action cannot be undone</p>
+                    </div>
+                  </div>
                   
-                  <button
-                    onClick={() => updatePoints(index, 1)}
-                    disabled={student.points === 20}
-                    className="w-8 h-8 bg-green-500 text-white rounded-full hover:bg-green-600 disabled:bg-gray-300 flex items-center justify-center"
-                  >
-                    <Plus size={14} />
-                  </button>
+                  <p className="text-gray-700 mb-6">
+                    Are you sure you want to delete{' '}
+                    <span className="font-semibold">
+                      {students[showDeleteConfirm]?.name}
+                    </span>
+                    ? All their participation data will be permanently removed.
+                  </p>
+                  
+                  <div className="flex gap-3 justify-end">
+                    <button
+                      onClick={cancelDeleteStudent}
+                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={confirmDeleteStudent}
+                      className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2"
+                    >
+                      <Trash2 size={16} />
+                      Delete Student
+                    </button>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         ) : (
           <div className="text-center py-12">
             <Users className="mx-auto text-gray-400 mb-4" size={64} />
