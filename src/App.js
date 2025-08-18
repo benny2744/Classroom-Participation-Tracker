@@ -68,6 +68,48 @@ const ClassroomTracker = () => {
     setSelectedStudentIndex(null);
   };
 
+  // Add points to all students
+  const addPointToAll = () => {
+    if (!currentClass || students.length === 0) return;
+    
+    const updatedStudents = students.map(student => ({
+      ...student,
+      points: Math.min(20, student.points + 1)
+    }));
+    
+    const updatedClasses = {
+      ...classes,
+      [currentClass]: {
+        ...classes[currentClass],
+        students: updatedStudents
+      }
+    };
+    
+    setStudents(updatedStudents);
+    saveData(updatedClasses);
+  };
+
+  // Subtract points from all students
+  const subtractPointFromAll = () => {
+    if (!currentClass || students.length === 0) return;
+    
+    const updatedStudents = students.map(student => ({
+      ...student,
+      points: Math.max(0, student.points - 1)
+    }));
+    
+    const updatedClasses = {
+      ...classes,
+      [currentClass]: {
+        ...classes[currentClass],
+        students: updatedStudents
+      }
+    };
+    
+    setStudents(updatedStudents);
+    saveData(updatedClasses);
+  };
+
   // Get current week key (year-week format)
   const getWeekKey = () => {
     const now = new Date();
@@ -623,7 +665,7 @@ const ClassroomTracker = () => {
                   {/* Minimized Tools Info */}
                   {toolsMinimized && (
                     <div className="flex items-center gap-3 text-sm text-gray-600">
-                      <span>Random selection available</span>
+                      <span>Random selection & class actions available</span>
                       {selectedStudentIndex !== null && (
                         <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs font-medium">
                           {students[selectedStudentIndex]?.name} selected
@@ -647,7 +689,8 @@ const ClassroomTracker = () => {
 
             {/* Collapsible Tools Content */}
             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${toolsMinimized ? 'max-h-0' : 'max-h-96'}`}>
-              <div className="p-6 pt-4">
+              <div className="p-6 pt-4 space-y-4">
+                {/* Random Student Selection */}
                 <div className="flex flex-wrap gap-3 items-center">
                   <div className="flex items-center gap-2 text-sm text-gray-600 mr-4">
                     <Shuffle size={16} />
@@ -681,6 +724,36 @@ const ClassroomTracker = () => {
                       </span>
                     </div>
                   )}
+                </div>
+
+                {/* Class-wide Actions */}
+                <div className="flex flex-wrap gap-3 items-center border-t pt-4">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 mr-4">
+                    <Users size={16} />
+                    Class Actions:
+                  </div>
+                  
+                  <button
+                    onClick={addPointToAll}
+                    disabled={students.length === 0}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 transition-colors duration-200"
+                  >
+                    <Plus size={16} />
+                    All +1
+                  </button>
+                  
+                  <button
+                    onClick={subtractPointFromAll}
+                    disabled={students.length === 0}
+                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 transition-colors duration-200"
+                  >
+                    <Minus size={16} />
+                    All -1
+                  </button>
+                  
+                  <div className="text-sm text-gray-500">
+                    Affects all {students.length} students
+                  </div>
                 </div>
               </div>
             </div>
