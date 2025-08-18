@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  classroom-tracker:
+    build: .
+    ports:
+      - "3000:80"
+    container_name: classroom-participation-tracker
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    volumes:
+      # Optional: mount config files
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - classroom-network
+
+networks:
+  classroom-network:
+    driver: bridge
+
+# Optional: Add a database service for future enhancements
+# services:
+#   db:
+#     image: postgres:15-alpine
+#     environment:
+#       POSTGRES_DB: classroom_tracker
+#       POSTGRES_USER: tracker_user
+#       POSTGRES_PASSWORD: secure_password
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#     networks:
+#       - classroom-network
+#
+# volumes:
+#   postgres_data:
