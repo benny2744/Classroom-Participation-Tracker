@@ -768,7 +768,7 @@ const ClassroomTracker = () => {
                 <div 
                   key={student.id} 
                   data-student-index={index}
-                  className={`bg-white rounded-lg shadow-md p-4 text-center relative group transition-all duration-300 ${
+                  className={`bg-white rounded-lg shadow-md p-6 text-center relative group transition-all duration-300 ${
                     selectedStudentIndex === index 
                       ? 'ring-4 ring-purple-400 ring-opacity-75 bg-purple-50 shadow-lg transform scale-105' 
                       : 'hover:shadow-lg'
@@ -791,16 +791,16 @@ const ClassroomTracker = () => {
                   </button>
                   
                   {/* Profile Picture with Upload */}
-                  <div className="relative group mb-3">
+                  <div className="relative group mb-4">
                     <img
                       src={student.avatar}
                       alt={student.name}
-                      className="w-16 h-16 rounded-full mx-auto bg-gray-100 object-cover"
+                      className="w-24 h-24 rounded-full mx-auto bg-gray-100 object-cover shadow-md"
                     />
                     
                     {/* Upload overlay - appears on hover */}
                     <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
-                      <Camera size={20} className="text-white" />
+                      <Camera size={24} className="text-white" />
                     </div>
                     
                     {/* Hidden file input */}
@@ -819,44 +819,46 @@ const ClassroomTracker = () => {
                           e.stopPropagation();
                           resetToDefaultAvatar(index);
                         }}
-                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center"
+                        className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center"
                         title="Reset to default avatar"
                       >
                         ×
                       </button>
                     )}
+                    
+                    {/* Small Points Display - positioned over avatar */}
+                    <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-white border-2 border-gray-200 rounded-full px-2 py-1 shadow-sm">
+                      <span className="text-xs font-medium text-gray-600">
+                        {student.points}/20
+                      </span>
+                    </div>
                   </div>
                   
-                  <h3 className="font-semibold text-gray-800 mb-2 text-sm truncate">
-                    {student.name}
+                  <h3 className="font-bold text-gray-800 mb-3 text-lg leading-tight px-1 min-h-[3rem] flex items-center justify-center">
+                    <span className="text-center">{student.name}</span>
                   </h3>
                   
                   {/* Participation Lights */}
-                  <div className="flex justify-center gap-1 mb-3">
+                  <div className="flex justify-center gap-1 mb-4">
                     {renderLights(student.points)}
                   </div>
                   
-                  {/* Points Display */}
-                  <div className="text-lg font-bold text-gray-700 mb-3">
-                    {student.points}/20
-                  </div>
-                  
                   {/* Control Buttons */}
-                  <div className="flex gap-2 justify-center">
+                  <div className="flex gap-2 justify-center mt-2">
                     <button
                       onClick={() => updatePoints(index, -1)}
                       disabled={student.points === 0}
-                      className="w-8 h-8 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:bg-gray-300 flex items-center justify-center"
+                      className="w-10 h-10 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:bg-gray-300 flex items-center justify-center transition-colors duration-200"
                     >
-                      <Minus size={14} />
+                      <Minus size={16} />
                     </button>
                     
                     <button
                       onClick={() => updatePoints(index, 1)}
                       disabled={student.points === 20}
-                      className="w-8 h-8 bg-green-500 text-white rounded-full hover:bg-green-600 disabled:bg-gray-300 flex items-center justify-center"
+                      className="w-10 h-10 bg-green-500 text-white rounded-full hover:bg-green-600 disabled:bg-gray-300 flex items-center justify-center transition-colors duration-200"
                     >
-                      <Plus size={14} />
+                      <Plus size={16} />
                     </button>
                   </div>
                 </div>
