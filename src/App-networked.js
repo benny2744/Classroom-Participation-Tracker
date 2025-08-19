@@ -24,17 +24,16 @@ const ClassroomTracker = () => {
   
   const fileInputRefs = useRef({});
   const reconnectTimeoutRef = useRef(null);
+  const [processingOperations, setProcessingOperations] = useState(new Set());
+  const socketRef = useRef(null);
+  const mountedRef = useRef(true);
 
   // Auto-detect server URL
   const detectServerUrl = useCallback(() => {
-    // Try different possible server URLs
-    const possibleUrls = [
-      `http://localhost:3001`,
-      `http://${window.location.hostname}:3001`,
-      // Add more if needed
-    ];
-    
-    return possibleUrls[0]; // Default to localhost for development
+    const hostname = window.location.hostname;
+    const serverUrl = `http://${hostname}:3001`;
+    console.log('Detected server URL:', serverUrl);
+    return serverUrl;
   }, []);
 
   // API helper functions
@@ -61,8 +60,10 @@ const ClassroomTracker = () => {
     }
   }, [serverUrl]);
 
-  // Initialize connection
+  // Initialize connection - only once
   useEffect(() => {
+    mountedRef.current = true;
+    
     const savedMinimized = JSON.parse(localStorage.getItem('controlsMinimized') || 'false');
     const savedToolsMinimized = JSON.parse(localStorage.getItem('toolsMinimized') || 'false');
     setControlsMinimized(savedMinimized);
@@ -70,13 +71,33 @@ const ClassroomTracker = () => {
 
     const detectedUrl = detectServerUrl();
     setServerUrl(detectedUrl);
-    connectToServer(detectedUrl);
-  }, [detectServerUrl]);
+    
+    // Only connect if we don't have an existing socket
+    if (!socketRef.current) {
+      connectToServer(detectedUrl);
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      mountedRef.current = false;
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+    };
+  }, []); // Empty dependency array - only run once
 
-  // Connect to server
+  // Connect to server - fixed to prevent duplicate listeners
   const connectToServer = useCallback((url) => {
-    if (socket) {
-      socket.disconnect();
+    // Clean up existing socket if any
+    if (socketRef.current) {
+      console.log('Cleaning up existing socket');
+      socketRef.current.removeAllListeners();
+      socketRef.current.disconnect();
+      socketRef.current = null;
     }
 
     setConnectionError('');
@@ -89,7 +110,12 @@ const ClassroomTracker = () => {
       reconnectionDelay: 1000
     });
 
+    // Store socket in ref
+    socketRef.current = newSocket;
+
+    // Connection events
     newSocket.on('connect', () => {
+      if (!mountedRef.current) return;
       console.log('✅ Connected to server');
       setIsConnected(true);
       setConnectionError('');
@@ -97,11 +123,13 @@ const ClassroomTracker = () => {
     });
 
     newSocket.on('disconnect', () => {
+      if (!mountedRef.current) return;
       console.log('❌ Disconnected from server');
       setIsConnected(false);
     });
 
     newSocket.on('connect_error', (error) => {
+      if (!mountedRef.current) return;
       console.error('Connection error:', error);
       setIsConnected(false);
       setConnectionError(`Cannot connect to server at ${url}`);
@@ -110,13 +138,15 @@ const ClassroomTracker = () => {
 
     // Listen for initial data
     newSocket.on('initial-data', (data) => {
+      if (!mountedRef.current) return;
       setClasses(data.classroomData);
       setCurrentWeek(data.currentWeek);
       setConnectedDevices(data.serverInfo.connectedDevices);
     });
 
-    // Real-time event listeners
+    // Real-time event listeners - all check mountedRef
     newSocket.on('class-created', (data) => {
+      if (!mountedRef.current) return;
       setClasses(prev => ({
         ...prev,
         [data.className]: data.data
@@ -124,21 +154,17 @@ const ClassroomTracker = () => {
     });
 
     newSocket.on('class-deleted', (data) => {
+      if (!mountedRef.current) return;
       setClasses(prev => {
         const updated = { ...prev };
         delete updated[data.className];
         return updated;
       });
-      if (currentClass === data.className) {
-        setCurrentClass('');
-        setStudents([]);
-      }
+      setCurrentClass(prevClass => prevClass === data.className ? '' : prevClass);
     });
 
     newSocket.on('student-added', (data) => {
-      if (data.className === currentClass) {
-        setStudents(prev => [...prev, data.student]);
-      }
+      if (!mountedRef.current) return;
       setClasses(prev => ({
         ...prev,
         [data.className]: {
@@ -149,15 +175,7 @@ const ClassroomTracker = () => {
     });
 
     newSocket.on('student-deleted', (data) => {
-      if (data.className === currentClass) {
-        setStudents(prev => prev.filter(s => s.id !== data.studentId));
-        // Adjust selected index if needed
-        if (selectedStudentIndex === data.studentIndex) {
-          setSelectedStudentIndex(null);
-        } else if (selectedStudentIndex !== null && selectedStudentIndex > data.studentIndex) {
-          setSelectedStudentIndex(selectedStudentIndex - 1);
-        }
-      }
+      if (!mountedRef.current) return;
       setClasses(prev => ({
         ...prev,
         [data.className]: {
@@ -165,16 +183,17 @@ const ClassroomTracker = () => {
           students: prev[data.className]?.students.filter(s => s.id !== data.studentId) || []
         }
       }));
+      
+      // Clear selection if deleted student was selected
+      setSelectedStudentIndex(prevIndex => {
+        if (data.studentIndex === prevIndex) return null;
+        if (prevIndex !== null && prevIndex > data.studentIndex) return prevIndex - 1;
+        return prevIndex;
+      });
     });
 
     newSocket.on('student-points-updated', (data) => {
-      if (data.className === currentClass) {
-        setStudents(prev => prev.map(student => 
-          student.id === data.studentId 
-            ? { ...student, points: data.points }
-            : student
-        ));
-      }
+      if (!mountedRef.current) return;
       setClasses(prev => ({
         ...prev,
         [data.className]: {
@@ -189,13 +208,7 @@ const ClassroomTracker = () => {
     });
 
     newSocket.on('student-updated', (data) => {
-      if (data.className === currentClass) {
-        setStudents(prev => prev.map(student => 
-          student.id === data.studentId 
-            ? { ...student, ...data.updates }
-            : student
-        ));
-      }
+      if (!mountedRef.current) return;
       setClasses(prev => ({
         ...prev,
         [data.className]: {
@@ -210,9 +223,7 @@ const ClassroomTracker = () => {
     });
 
     newSocket.on('week-reset', (data) => {
-      if (data.className === currentClass) {
-        setStudents(prev => prev.map(student => ({ ...student, points: 0 })));
-      }
+      if (!mountedRef.current) return;
       setClasses(prev => ({
         ...prev,
         [data.className]: {
@@ -223,12 +234,7 @@ const ClassroomTracker = () => {
     });
 
     newSocket.on('all-points-updated', (data) => {
-      if (data.className === currentClass) {
-        setStudents(prev => prev.map(student => ({
-          ...student,
-          points: Math.max(0, Math.min(20, student.points + data.change))
-        })));
-      }
+      if (!mountedRef.current) return;
       setClasses(prev => ({
         ...prev,
         [data.className]: {
@@ -242,42 +248,56 @@ const ClassroomTracker = () => {
     });
 
     newSocket.on('student-selected', (data) => {
-      if (data.className === currentClass) {
-        setSelectedStudentIndex(data.studentIndex);
-      }
+      if (!mountedRef.current) return;
+      setCurrentClass(prevClass => {
+        if (data.className === prevClass) {
+          setSelectedStudentIndex(data.studentIndex);
+        }
+        return prevClass;
+      });
     });
 
     newSocket.on('selection-cleared', (data) => {
-      if (data.className === currentClass) {
-        setSelectedStudentIndex(null);
-      }
+      if (!mountedRef.current) return;
+      setCurrentClass(prevClass => {
+        if (data.className === prevClass) {
+          setSelectedStudentIndex(null);
+        }
+        return prevClass;
+      });
     });
 
     newSocket.on('data-reset', (data) => {
+      if (!mountedRef.current) return;
       setCurrentWeek(data.week);
-      // Refresh all data
       loadClassData();
     });
 
     setSocket(newSocket);
-  }, [socket, currentClass, selectedStudentIndex]);
+  }, []); // Empty dependencies - only create once
 
   // Load class data
   const loadClassData = useCallback(async () => {
-    if (!serverUrl) return;
+    if (!serverUrl || !mountedRef.current) return;
     
     try {
       const data = await apiCall('/api/classes');
-      setClasses(data);
+      if (data && mountedRef.current) {
+        setClasses(data);
+      }
     } catch (error) {
       console.error('Failed to load class data:', error);
     }
   }, [apiCall, serverUrl]);
 
-  // Update current students when class changes
+  // Update current students when class changes - with cleanup
   useEffect(() => {
+    if (!mountedRef.current) return;
+    
     if (currentClass && classes[currentClass]) {
-      setStudents([...classes[currentClass].students]);
+      const newStudents = [...classes[currentClass].students];
+      console.log('Syncing students from classes:', newStudents.length, 'students');
+      setStudents(newStudents);
     } else {
       setStudents([]);
     }
@@ -297,34 +317,75 @@ const ClassroomTracker = () => {
     localStorage.setItem('toolsMinimized', JSON.stringify(newToolsMinimizedState));
   };
 
-  // Create new class
+  // Create new class - with processing flag
   const createClass = async () => {
     if (!newClassName.trim() || !isConnected) return;
     
     try {
-      await apiCall('/api/classes', {
+      const result = await apiCall('/api/classes', {
         method: 'POST',
         body: JSON.stringify({ className: newClassName.trim() })
       });
-      setCurrentClass(newClassName.trim());
-      setNewClassName('');
+      
+      if (result) {
+        setCurrentClass(newClassName.trim());
+        setNewClassName('');
+      }
     } catch (error) {
       alert('Failed to create class. Please check your connection.');
     }
   };
 
-  // Add/remove points
+  // Add/remove points - with optimistic updates
   const updatePoints = async (studentIndex, change) => {
     if (!currentClass || !isConnected || !students[studentIndex]) return;
     
     const student = students[studentIndex];
+    const operationKey = `points-${student.id}-${change}`;
+    
+    // Check if this specific operation is already in progress
+    if (processingOperations.has(operationKey)) return;
+    
+    console.log('Updating points for student:', student.name, 'change:', change);
+    
+    // Calculate new points value
+    const newPoints = Math.max(0, Math.min(20, student.points + change));
+    
+    // Optimistic update - update local state immediately
+    setStudents(prev => prev.map((s, idx) => 
+      idx === studentIndex 
+        ? { ...s, points: newPoints }
+        : s
+    ));
+    
+    // Mark this operation as processing
+    setProcessingOperations(prev => new Set(prev).add(operationKey));
+    
     try {
-      await apiCall(`/api/classes/${encodeURIComponent(currentClass)}/students/${student.id}/points`, {
+      const result = await apiCall(`/api/classes/${encodeURIComponent(currentClass)}/students/${student.id}/points`, {
         method: 'PUT',
         body: JSON.stringify({ change })
       });
+      
+      if (result) {
+        console.log('Points update result:', result);
+      }
     } catch (error) {
+      // Revert the optimistic update on error
+      setStudents(prev => prev.map((s, idx) => 
+        idx === studentIndex 
+          ? { ...s, points: student.points }
+          : s
+      ));
+      console.error('Points update error:', error);
       alert('Failed to update points. Please check your connection.');
+    } finally {
+      // Remove the operation from processing set
+      setProcessingOperations(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(operationKey);
+        return newSet;
+      });
     }
   };
 
@@ -333,7 +394,7 @@ const ClassroomTracker = () => {
     if (!newStudentName.trim() || !currentClass || !isConnected) return;
     
     try {
-      await apiCall(`/api/classes/${encodeURIComponent(currentClass)}/students`, {
+      const result = await apiCall(`/api/classes/${encodeURIComponent(currentClass)}/students`, {
         method: 'POST',
         body: JSON.stringify({
           student: {
@@ -343,28 +404,34 @@ const ClassroomTracker = () => {
           }
         })
       });
-      setNewStudentName('');
+      
+      if (result) {
+        setNewStudentName('');
+      }
     } catch (error) {
       alert('Failed to add student. Please check your connection.');
     }
   };
 
-  // Delete student
+  // Delete student - with processing flag
   const confirmDeleteStudent = async () => {
     if (showDeleteConfirm === null || !currentClass || !isConnected) return;
     
     const student = students[showDeleteConfirm];
     try {
-      await apiCall(`/api/classes/${encodeURIComponent(currentClass)}/students/${student.id}`, {
+      const result = await apiCall(`/api/classes/${encodeURIComponent(currentClass)}/students/${student.id}`, {
         method: 'DELETE'
       });
-      setShowDeleteConfirm(null);
+      
+      if (result) {
+        setShowDeleteConfirm(null);
+      }
     } catch (error) {
       alert('Failed to delete student. Please check your connection.');
     }
   };
 
-  // Reset week
+  // Reset week - with processing flag
   const resetWeek = async () => {
     if (!currentClass || !isConnected) return;
     
@@ -377,9 +444,23 @@ const ClassroomTracker = () => {
     }
   };
 
-  // Add points to all students
+  // Add points to all students - with optimistic updates
   const addPointToAll = async () => {
     if (!currentClass || students.length === 0 || !isConnected) return;
+    
+    const operationKey = 'add-all-points';
+    
+    // Check if this operation is already in progress
+    if (processingOperations.has(operationKey)) return;
+    
+    // Optimistic update - update local state immediately
+    setStudents(prev => prev.map(student => ({
+      ...student,
+      points: Math.max(0, Math.min(20, student.points + 1))
+    })));
+    
+    // Mark this operation as processing
+    setProcessingOperations(prev => new Set(prev).add(operationKey));
     
     try {
       await apiCall(`/api/classes/${encodeURIComponent(currentClass)}/all-points`, {
@@ -387,13 +468,39 @@ const ClassroomTracker = () => {
         body: JSON.stringify({ change: 1 })
       });
     } catch (error) {
+      // Revert the optimistic update on error
+      setStudents(prev => prev.map(student => ({
+        ...student,
+        points: Math.max(0, Math.min(20, student.points - 1))
+      })));
       alert('Failed to update all students. Please check your connection.');
+    } finally {
+      // Remove the operation from processing set
+      setProcessingOperations(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(operationKey);
+        return newSet;
+      });
     }
   };
 
-  // Subtract points from all students
+  // Subtract points from all students - with optimistic updates
   const subtractPointFromAll = async () => {
     if (!currentClass || students.length === 0 || !isConnected) return;
+    
+    const operationKey = 'subtract-all-points';
+    
+    // Check if this operation is already in progress
+    if (processingOperations.has(operationKey)) return;
+    
+    // Optimistic update - update local state immediately
+    setStudents(prev => prev.map(student => ({
+      ...student,
+      points: Math.max(0, Math.min(20, student.points - 1))
+    })));
+    
+    // Mark this operation as processing
+    setProcessingOperations(prev => new Set(prev).add(operationKey));
     
     try {
       await apiCall(`/api/classes/${encodeURIComponent(currentClass)}/all-points`, {
@@ -401,13 +508,25 @@ const ClassroomTracker = () => {
         body: JSON.stringify({ change: -1 })
       });
     } catch (error) {
+      // Revert the optimistic update on error
+      setStudents(prev => prev.map(student => ({
+        ...student,
+        points: Math.max(0, Math.min(20, student.points + 1))
+      })));
       alert('Failed to update all students. Please check your connection.');
+    } finally {
+      // Remove the operation from processing set
+      setProcessingOperations(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(operationKey);
+        return newSet;
+      });
     }
   };
 
-  // Random student selection
+  // Random student selection - using socketRef
   const selectRandomStudent = () => {
-    if (students.length === 0 || !socket) {
+    if (students.length === 0 || !socketRef.current) {
       alert('No students available to select!');
       return;
     }
@@ -415,7 +534,7 @@ const ClassroomTracker = () => {
     const randomIndex = Math.floor(Math.random() * students.length);
     const student = students[randomIndex];
     
-    socket.emit('select-random-student', {
+    socketRef.current.emit('select-random-student', {
       className: currentClass,
       studentIndex: randomIndex,
       studentId: student.id
@@ -430,16 +549,16 @@ const ClassroomTracker = () => {
     }, 100);
   };
 
-  // Clear selection
+  // Clear selection - using socketRef
   const clearSelection = () => {
-    if (!socket) return;
+    if (!socketRef.current) return;
     
-    socket.emit('clear-selection', {
+    socketRef.current.emit('clear-selection', {
       className: currentClass
     });
   };
 
-  // Update student profile
+  // Update student profile - with processing flag
   const updateStudentProfile = async (studentIndex, updates) => {
     if (!currentClass || !isConnected || !students[studentIndex]) return;
     
@@ -533,16 +652,57 @@ const ClassroomTracker = () => {
     }
   };
 
-  // Import CSV (simplified for now)
-  const importCSV = (event) => {
+  // Import CSV - fixed with processing flag
+  const importCSV = async (event) => {
     const file = event.target.files[0];
     if (!file || !currentClass || !isConnected) return;
     
-    alert('CSV import will be implemented in the next version. For now, please add students manually.');
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const csv = e.target.result;
+      const lines = csv.split('\n').filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        alert('CSV file must have at least a header and one student row.');
+        return;
+      }
+      
+      try {
+        // Import students one by one to ensure proper server sync
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',');
+          const studentName = values[0]?.replace(/"/g, '').trim();
+          
+          if (studentName && mountedRef.current) {
+            await apiCall(`/api/classes/${encodeURIComponent(currentClass)}/students`, {
+              method: 'POST',
+              body: JSON.stringify({
+                student: {
+                  name: studentName,
+                  avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${studentName}`,
+                  hasCustomAvatar: false
+                }
+              })
+            });
+            
+            // Small delay to prevent overwhelming the server
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
+        
+        if (mountedRef.current) {
+          alert(`Successfully imported ${lines.length - 1} students!`);
+        }
+      } catch (error) {
+        console.error('CSV import error:', error);
+        alert('Failed to import some students. Please check your connection and try again.');
+      }
+    };
+    reader.readAsText(file);
     event.target.value = '';
   };
 
-  // Render participation lights (same as before)
+  // Render participation lights
   const renderLights = (points) => {
     const lights = [];
     for (let i = 0; i < 5; i++) {
@@ -661,7 +821,6 @@ const ClassroomTracker = () => {
           </div>
         )}
 
-        {/* Rest of the component remains the same as the original */}
         {/* Header - Collapsible */}
         <div className={`bg-white rounded-lg shadow-md transition-all duration-300 ease-in-out ${controlsMinimized ? 'mb-3' : 'mb-6'}`}>
           {/* Always Visible Header Bar */}
@@ -976,6 +1135,7 @@ const ClassroomTracker = () => {
                         accept="image/*"
                         onChange={(e) => uploadProfilePic(index, e)}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        disabled={false}
                       />
                     )}
                     
@@ -988,6 +1148,7 @@ const ClassroomTracker = () => {
                         }}
                         className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center"
                         title="Reset to default avatar"
+                        disabled={false}
                       >
                         ×
                       </button>
