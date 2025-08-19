@@ -1,0 +1,81 @@
+{
+  "CL Business": {
+    "students": [
+      {
+        "id": 1755565475420,
+        "name": "asdf",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=asdf",
+        "hasCustomAvatar": false,
+        "points": 0,
+        "createdAt": "2025-08-19T01:04:35.420Z",
+        "lastUpdated": "2025-08-19T06:44:46.561Z"
+      },
+      {
+        "id": 1755565495672,
+        "name": "sss",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=sss",
+        "hasCustomAvatar": false,
+        "points": 0,
+        "createdAt": "2025-08-19T01:04:55.672Z",
+        "lastUpdated": "2025-08-19T06:44:46.561Z"
+      },
+      {
+        "id": 1755566565375,
+        "name": "fdasfds",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=fdasfds",
+        "hasCustomAvatar": false,
+        "points": 0,
+        "createdAt": "2025-08-19T01:22:45.375Z",
+        "lastUpdated": "2025-08-19T06:44:46.561Z"
+      },
+      {
+        "id": 1755566567629,
+        "name": "aasdf",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=aasdf",
+        "hasCustomAvatar": false,
+        "points": 0,
+        "createdAt": "2025-08-19T01:22:47.629Z",
+        "lastUpdated": "2025-08-19T06:44:46.561Z"
+      },
+      {
+        "id": 1755566569539,
+        "name": "dddd",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=dddd",
+        "hasCustomAvatar": false,
+        "points": 0,
+        "createdAt": "2025-08-19T01:22:49.539Z",
+        "lastUpdated": "2025-08-19T06:44:46.561Z"
+      },
+      {
+        "id": 1755566571760,
+        "name": "fffff",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=fffff",
+        "hasCustomAvatar": false,
+        "points": 0,
+        "createdAt": "2025-08-19T01:22:51.760Z",
+        "lastUpdated": "2025-08-19T06:44:46.561Z"
+      },
+      {
+        "id": 1755566574081,
+        "name": "cccc",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=cccc",
+        "hasCustomAvatar": false,
+        "points": 0,
+        "createdAt": "2025-08-19T01:22:54.081Z",
+        "lastUpdated": "2025-08-19T06:44:46.561Z"
+      },
+      {
+        "id": 1755584806495,
+        "name": "aaa",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=aaa",
+        "hasCustomAvatar": false,
+        "points": 0,
+        "createdAt": "2025-08-19T06:26:46.495Z",
+        "lastUpdated": "2025-08-19T06:44:46.561Z"
+      }
+    ],
+    "lastWeek": "2025-W34",
+    "weeklyHistory": {},
+    "createdAt": "2025-08-19T00:51:12.493Z"
+  }
+}
