@@ -1,123 +1,249 @@
-# Classroom Participation Tracker
+# 🎓 Classroom Participation Tracker
 
-A web-based classroom participation tracking system inspired by ClassDojo's interface. Track student engagement with visual indicators and export weekly reports.
+A **networked** web-based classroom participation tracking system inspired by ClassDojo. Track student engagement across multiple devices with real-time synchronization and visual indicators.
 
-## Features
+![Status](https://img.shields.io/badge/Status-Active-green)
+![Version](https://img.shields.io/badge/Version-2.0.0-blue)
+![Platform](https://img.shields.io/badge/Platform-Web-orange)
 
-- 📊 **Visual Participation Tracking**: 5-light indicator system with color progression
-- 👥 **Class Management**: Create and manage multiple classes with dropdown selection
-- 📈 **Point System**: 0-20 point range with easy +/- buttons
-- 📅 **Weekly Reset**: Automatic weekly reset with manual override
-- 📁 **CSV Import/Export**: Load class rosters and export participation data
-- 💾 **Data Persistence**: Local storage with weekly history tracking
-- 🎨 **Modern UI**: Clean, responsive design with Tailwind CSS
+## ✨ Features
 
-## Quick Start
+### 🌟 **Core Features**
+- 📊 **Visual Participation Tracking**: 5-light indicator system with color progression (Green → Blue → Purple → Gold)
+- 👥 **Multi-Class Management**: Create and manage multiple classes with easy switching
+- 📈 **Smart Point System**: 0-20 point range with immediate visual feedback
+- 🔄 **Real-Time Sync**: All connected devices update instantly
+- 📅 **Automatic Weekly Reset**: Points reset weekly with historical data preservation
 
-### Docker (Recommended)
+### 🚀 **Advanced Features** 
+- 📱 **Multi-Device Support**: Connect tablets, phones, and computers simultaneously
+- 🎲 **Random Student Selection**: Built-in student picker with visual highlighting  
+- 📁 **CSV Import/Export**: Bulk import student rosters and export participation reports
+- 💾 **Persistent Data**: Auto-saves every 30 seconds with weekly history tracking
+- 🎨 **Responsive UI**: Clean, modern design optimized for all screen sizes
+- ⚡ **Optimistic Updates**: Buttons respond instantly with error recovery
 
-1. Clone this repository
-2. Run with Docker Compose:
+### 🔧 **Recently Fixed**
+- ✅ **Button Responsiveness**: Fixed button locking issues - all buttons now respond immediately
+- ✅ **Network Stability**: Improved connection handling and error recovery
+- ✅ **Performance**: Enhanced real-time synchronization across devices
+
+## 🚀 Quick Start
+
+### Option 1: Docker (Recommended)
+
+**Prerequisites:** Docker and Docker Compose installed
+
 ```bash
+# 1. Clone the repository
+git clone https://github.com/benny2744/Classroom-Participation-Tracker.git
+cd Classroom-Participation-Tracker
+
+# 2. Switch to networked branch
+git checkout Networked
+
+# 3. Start with Docker Compose
 docker-compose up -d
 
-Open http://localhost:3000
+# 4. Access the application
+# Frontend: http://localhost:3000
+# Backend API: http://localhost:3001
+```
 
-Local Development
-Prerequisites
+### Option 2: Local Development
 
-Node.js 16+ and npm
-Git
+**Prerequisites:** 
+- Node.js 16+ ([Download here](https://nodejs.org/))
+- npm (comes with Node.js)
+- Git
 
-Setup Steps
+```bash
+# 1. Clone the repository
+git clone https://github.com/benny2744/Classroom-Participation-Tracker.git
+cd Classroom-Participation-Tracker
 
-Clone the repository:
+# 2. Switch to networked branch
+git checkout Networked
 
-bashgit clone https://github.com/yourusername/classroom-participation-tracker.git
-cd classroom-participation-tracker
+# 3. Install dependencies
+npm install
 
-Install dependencies:
+# 4. Start the backend server (Terminal 1)
+node server.js
 
-bashnpm install
-
-Start the development server:
-
-bashnpm start
-
-Open your browser to http://localhost:3000
-
-The development server includes:
-
-⚡ Hot reload for instant code changes
-🔧 Built-in error overlay for debugging
-📱 Responsive design testing tools
-🌐 Network access for mobile testing
-
-Development Commands
-bash# Start development server
+# 5. Start the frontend app (Terminal 2)
 npm start
 
-# Run tests
-npm test
+# 6. Access the application
+# Frontend: http://localhost:3000
+# Backend: http://localhost:3001
+```
 
-# Build for production
-npm run build
+### Option 3: One-Click Startup (Mac/Linux)
 
-# Serve production build locally
-npx serve -s build
-File Structure for Development
-src/
-├── App.js          # Main component with all tracker logic
-├── index.js        # React app entry point
-└── index.css       # Global styles
-Making Changes
+After cloning and installing dependencies:
 
-Edit src/App.js for component logic and UI changes
-The app uses Tailwind CSS classes for styling
-Data is stored in localStorage (inspect via browser dev tools)
-CSV import/export functionality works with local files
+```bash
+# Make the script executable
+chmod +x start-classroom-tracker.command
 
-Usage
+# Run the startup script
+./start-classroom-tracker.command
+```
 
-Create a Class: Enter a class name and click "Create Class"
-Import Students: Use "Import CSV" to load a roster (CSV with student names)
-Track Participation: Click +/- buttons to award/remove points
-Export Data: Download weekly reports as CSV files
-Weekly Reset: Points automatically reset each week
+## 📱 Multi-Device Setup
 
-Color System
+### 1. **Teacher's Device (Main)**
+- Open http://localhost:3000 (if running locally)
+- Create classes and manage students
+- Use the main controls and tools
 
-🟢 Green (1-5 points): Initial participation level
-🔵 Blue (6-10 points): Good participation
-🟣 Purple (11-15 points): Excellent participation
-🟡 Gold (16-20 points): Outstanding participation
+### 2. **Student Tablets/Secondary Devices**
+- Connect to the same Wi-Fi network
+- Open http://[YOUR-IP]:3001 (network URL shown in terminal)
+- All devices sync in real-time automatically
 
-CSV Format
-Import CSV files with student names:
-csvName
+### 3. **Finding Your Network URL**
+When you start the server, look for output like:
+```
+🌐 Network access: http://192.168.1.100:3001
+```
+Use this URL on other devices on the same network.
+
+## 📖 Usage Guide
+
+### Getting Started
+1. **Create a Class**: Enter a class name and click "Create Class"
+2. **Add Students**: 
+   - Manually: Type names and click "Add Student"
+   - Bulk Import: Use "Import CSV" with a file containing student names
+3. **Start Tracking**: Click +/- buttons to award/remove participation points
+
+### Advanced Features
+- **Random Student Selection**: Use the "Random Student" button in Tools section
+- **Class-Wide Actions**: Use "All +1" or "All -1" to adjust all students at once
+- **Weekly Reports**: Export participation data as CSV files
+- **Profile Pictures**: Click on student avatars to upload custom photos
+
+### Color System
+- 🟢 **Green (1-5 points)**: Initial participation
+- 🔵 **Blue (6-10 points)**: Good participation  
+- 🟣 **Purple (11-15 points)**: Excellent participation
+- 🟡 **Gold (16-20 points)**: Outstanding participation
+
+## 📁 CSV Import Format
+
+Create a CSV file with student names:
+
+```csv
+Name
 John Doe
 Jane Smith
 Mike Johnson
-Technology Stack
+Sarah Wilson
+```
 
-React 18
-Tailwind CSS
-Lucide React Icons
-Local Storage API
+## 🛠️ Development
 
-Repository Structure
+### Project Structure
+```
 classroom-participation-tracker/
 ├── README.md
-├── package.json
-├── package-lock.json
-├── Dockerfile
-├── docker-compose.yml
-├── .dockerignore
-├── .gitignore
+├── package.json              # Dependencies and scripts
+├── server.js                 # Backend server (Node.js + Socket.io)
+├── docker-compose.yml        # Docker setup
 ├── public/
-│   ├── index.html
-│   └── manifest.json
+│   └── index.html            # HTML template
 └── src/
-    ├── App.js
-    ├── index.js
-    └── index.css
+    ├── App-networked.js      # Main React component (networked version)
+    ├── index.js              # React entry point
+    └── index.css             # Global styles
+```
+
+### Available Scripts
+```bash
+npm start          # Start development server
+npm test           # Run tests
+npm run build      # Build for production
+npm run eject      # Eject from Create React App (use carefully)
+```
+
+### Technology Stack
+- **Frontend**: React 18, Tailwind CSS, Lucide Icons
+- **Backend**: Node.js, Express, Socket.io
+- **Data Storage**: JSON file with auto-backup
+- **Real-time**: WebSocket connections
+- **Deployment**: Docker, Docker Compose
+
+## 🔧 Configuration
+
+### Environment Variables
+```bash
+PORT=3001                    # Backend server port
+NODE_ENV=production          # Environment mode
+```
+
+### Server Features
+- **Auto-save**: Data saves every 30 seconds
+- **Weekly Reset**: Automatic point reset with history preservation
+- **Health Check**: Available at `/api/health`
+- **Multi-device**: Supports unlimited connected devices
+
+## 🚨 Troubleshooting
+
+### Common Issues
+
+**🔴 "Cannot connect to server"**
+- Make sure the backend server is running (`node server.js`)
+- Check that port 3001 is not being used by another application
+- Verify you're on the same Wi-Fi network for multi-device access
+
+**🔴 "Port already in use"**
+- Kill existing processes: `lsof -ti:3000,3001 | xargs kill -9`
+- Or change ports in the configuration
+
+**🔴 "Buttons not responding"**
+- This was fixed in v2.0.0 - make sure you're on the `Networked` branch
+- Refresh the page to get the latest updates
+
+**🔴 "CSV import not working"**
+- Ensure your CSV has a "Name" header
+- Check file format (UTF-8 encoding recommended)
+- Files should be under 5MB
+
+### Getting Help
+1. Check the browser console for error messages (F12)
+2. Verify network connectivity between devices  
+3. Restart both frontend and backend servers
+4. Clear browser cache and localStorage
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the GPL-3.0 License - see the [LICENSE](LICENSE) file for details.
+
+## 🌟 Acknowledgments
+
+- Inspired by ClassDojo's engagement tracking system
+- Built with modern React and Node.js technologies
+- Designed for real-world classroom environments
+
+## 📞 Support
+
+For questions, issues, or feature requests:
+- 📧 Open an issue on GitHub
+- 🐛 Report bugs with detailed steps to reproduce
+- 💡 Suggest features via GitHub Discussions
+
+---
+
+**Made with ❤️ for educators worldwide**
+
+*Last updated: August 2025*
