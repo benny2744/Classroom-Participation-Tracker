@@ -87,22 +87,58 @@ Once started, the app is available at:
 4. Open the network URL on each device
 5. All devices will sync automatically in real-time
 
-## 🔧 Prerequisites
+## 🛠 Installation & Setup
 
-- Node.js 16+ and npm
-- All devices on the same Wi-Fi network for multi-device sync
+### 🎯 Quick Install (Recommended)
 
-## 📦 Installation
+Choose your platform and run the install script:
+
+### 🍎 **macOS Installation**
+1. **Download or clone this repository**
+2. **Double-click `install-setup-mac.command`**
+3. **Follow the prompts** - the script will:
+   - Install Homebrew (if needed)
+   - Install Node.js (if needed)
+   - Install Git (if needed)  
+   - Install project dependencies
+   - Configure network settings
+   - Set up desktop shortcuts
+   - Test everything
+
+### 🪟 **Windows Installation**
+
+#### Option 1: Batch Script (Easiest)
+1. **Download or clone this repository**
+2. **Double-click `install-setup-windows.bat`**
+3. **Follow the prompts** - the script will guide you through everything
+
+#### Option 2: PowerShell Script (Recommended for advanced users)
+1. **Right-click `install-setup-windows.ps1`** → "Run with PowerShell"
+2. **If prompted about execution policy**, type `Y` and press Enter
+3. **Follow the prompts** - includes colored output and advanced features
+
+Both Windows scripts will:
+- Check for Node.js and guide installation if needed
+- Install project dependencies
+- Configure Windows Firewall
+- Create desktop shortcuts
+- Test network connectivity
+- Verify installation
+
+### 💻 Manual Installation (All Platforms)
+
+If you prefer manual setup:
 
 ```bash
-# Clone the repository
+# 1. Install Node.js 16+ from https://nodejs.org/
+# 2. Clone or download this repository
 git clone https://github.com/benny2744/Classroom-Participation-Tracker.git
 cd Classroom-Participation-Tracker
 
-# Install dependencies
+# 3. Install dependencies
 npm install
 
-# Use one-click startup scripts OR manual commands above
+# 4. You're ready! Use startup scripts or manual commands
 ```
 
 ## 🎯 Usage Guide
@@ -149,6 +185,36 @@ docker-compose up -d
 # Access at http://localhost:3000
 ```
 
+## ✨ What Do the Install Scripts Do?
+
+The installation scripts automate the entire setup process:
+
+### 🔧 **System Setup**
+- **Check system compatibility** (Windows/macOS versions)
+- **Install Node.js** if not present (guides you through download)
+- **Install Homebrew** on macOS (if needed)
+- **Install Git** (optional but recommended)
+
+### 🌐 **Network Configuration**  
+- **Configure firewall rules** for ports 3000 and 3001
+- **Detect network IP address** for multi-device access
+- **Test network connectivity**
+- **Provide connection URLs** for all devices
+
+### 🚀 **Project Setup**
+- **Install npm dependencies** automatically
+- **Verify all required files** are present
+- **Test Node.js and npm** functionality
+- **Create desktop shortcuts** (optional)
+
+### 🎯 **Ready-to-Use Result**
+After running an install script, you'll have:
+- ✅ All dependencies installed
+- ✅ Network configured for multi-device sync
+- ✅ Desktop shortcuts created
+- ✅ Everything tested and verified
+- ✅ Ready to start with one click!
+
 ## 🆘 Troubleshooting
 
 - **Port conflicts**: Ports 3000/3001 already in use → Close other Node.js apps
@@ -162,15 +228,18 @@ docker-compose up -d
 classroom-participation-tracker/
 ├── README.md
 ├── package.json
-├── server.js                    # Backend server
-├── start-classroom-tracker.*    # One-click startup scripts
-├── launcher.scpt               # Mac AppleScript launcher
+├── server.js                         # Backend server
+├── install-setup-mac.command         # macOS install script
+├── install-setup-windows.bat         # Windows install script (batch)
+├── install-setup-windows.ps1         # Windows install script (PowerShell)
+├── start-classroom-tracker.*         # One-click startup scripts
+├── launcher.scpt                     # Mac AppleScript launcher
 ├── src/
-│   ├── App-networked.js        # Main React component
-│   ├── index.js               # App entry point
-│   └── index.css              # Styles
+│   ├── App-networked.js              # Main React component
+│   ├── index.js                     # App entry point
+│   └── index.css                    # Styles
 └── public/
-    └── index.html             # HTML template
+    └── index.html                   # HTML template
 ```
 
 ## 🤝 Contributing
