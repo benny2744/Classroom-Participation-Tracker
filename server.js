@@ -194,15 +194,20 @@ app.delete('/api/classes/:className/students/:studentId', (req, res) => {
     return res.status(404).json({ error: 'Class not found' });
   }
   
-  const studentIndex = classroomData[className].students.findIndex(s => s.id == studentId);
+  // Convert studentId to number for comparison since it comes as string from URL
+  const studentIdNum = parseInt(studentId, 10);
+  const studentIndex = classroomData[className].students.findIndex(s => s.id === studentIdNum);
+  
   if (studentIndex === -1) {
+    console.log('Student not found. Looking for ID:', studentIdNum, 'in students:', classroomData[className].students.map(s => s.id));
     return res.status(404).json({ error: 'Student not found' });
   }
   
   const deletedStudent = classroomData[className].students.splice(studentIndex, 1)[0];
   saveDataToFile();
   
-  io.emit('student-deleted', { className, studentId, studentIndex });
+  console.log('Student deleted:', deletedStudent.name, 'from class:', className);
+  io.emit('student-deleted', { className, studentId: studentIdNum, studentIndex });
   res.json({ success: true, deletedStudent });
 });
 
@@ -214,8 +219,12 @@ app.put('/api/classes/:className/students/:studentId/points', (req, res) => {
     return res.status(404).json({ error: 'Class not found' });
   }
   
-  const student = classroomData[className].students.find(s => s.id == studentId);
+  // Convert studentId to number for comparison
+  const studentIdNum = parseInt(studentId, 10);
+  const student = classroomData[className].students.find(s => s.id === studentIdNum);
+  
   if (!student) {
+    console.log('Student not found for points update. Looking for ID:', studentIdNum);
     return res.status(404).json({ error: 'Student not found' });
   }
   
@@ -229,9 +238,10 @@ app.put('/api/classes/:className/students/:studentId/points', (req, res) => {
   student.lastUpdated = new Date().toISOString();
   saveDataToFile();
   
+  console.log('Points updated for', student.name, 'to', student.points);
   io.emit('student-points-updated', { 
     className, 
-    studentId, 
+    studentId: studentIdNum, 
     points: student.points,
     change: change || 0,
     timestamp: student.lastUpdated
@@ -248,8 +258,12 @@ app.put('/api/classes/:className/students/:studentId', (req, res) => {
     return res.status(404).json({ error: 'Class not found' });
   }
   
-  const student = classroomData[className].students.find(s => s.id == studentId);
+  // Convert studentId to number for comparison
+  const studentIdNum = parseInt(studentId, 10);
+  const student = classroomData[className].students.find(s => s.id === studentIdNum);
+  
   if (!student) {
+    console.log('Student not found for update. Looking for ID:', studentIdNum);
     return res.status(404).json({ error: 'Student not found' });
   }
   
@@ -264,7 +278,8 @@ app.put('/api/classes/:className/students/:studentId', (req, res) => {
   student.lastUpdated = new Date().toISOString();
   saveDataToFile();
   
-  io.emit('student-updated', { className, studentId, updates: student });
+  console.log('Student updated:', student.name);
+  io.emit('student-updated', { className, studentId: studentIdNum, updates: student });
   res.json({ success: true, student });
 });
 
