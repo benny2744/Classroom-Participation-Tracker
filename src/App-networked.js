@@ -9,17 +9,13 @@ const ClassroomTracker = () => {
   const [currentWeek, setCurrentWeek] = useState('');
   const [newClassName, setNewClassName] = useState('');
   const [newStudentName, setNewStudentName] = useState('');
+  const [selectedStudentIndex, setSelectedStudentIndex] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [controlsMinimized, setControlsMinimized] = useState(false);
   const [toolsMinimized, setToolsMinimized] = useState(false);
-  const [selectedStudentIndex, setSelectedStudentIndex] = useState(null);
   const [presenterView, setPresenterView] = useState(false);
-  
-  // Network-related state
-  const [socket, setSocket] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
   const [serverUrl, setServerUrl] = useState('');
-  const [connectedDevices, setConnectedDevices] = useState(0);
+  const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState('');
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   
@@ -58,21 +54,17 @@ const ClassroomTracker = () => {
     try {
       const response = await fetch(url, config);
       if (!response.ok) {
-        throw new Error(`API call failed: ${response.status}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      const result = await response.json();
-      
-      await new Promise(resolve => setTimeout(resolve, 50));
-      
-      return result;
+      const data = await response.json();
+      return data;
     } catch (error) {
       console.error('API call error:', error);
       setConnectionError(`API Error: ${error.message}`);
       throw error;
     } finally {
-      setTimeout(() => {
-        isProcessingRef.current = false;
-      }, 100);
+      // Reset processing flag immediately after request completes
+      isProcessingRef.current = false;
     }
   }, [serverUrl]);
 
@@ -89,10 +81,7 @@ const ClassroomTracker = () => {
 
     const detectedUrl = detectServerUrl();
     setServerUrl(detectedUrl);
-    
-    if (!socketRef.current) {
-      connectToServer(detectedUrl);
-    }
+    connectToServer(detectedUrl);
     
     return () => {
       mountedRef.current = false;
@@ -122,7 +111,8 @@ const ClassroomTracker = () => {
       timeout: 5000,
       reconnection: true,
       reconnectionAttempts: 5,
-      reconnectionDelay: 1000
+      reconnectionDelay: 1000,
+      forceNew: true  // Force new connection to prevent event listener duplication
     });
 
     socketRef.current = newSocket;
@@ -147,31 +137,45 @@ const ClassroomTracker = () => {
       setIsConnected(false);
       setConnectionError(`Cannot connect to server at ${url}`);
       setShowConnectionModal(true);
+      
+      // Auto-retry connection
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      reconnectTimeoutRef.current = setTimeout(() => {
+        if (mountedRef.current) {
+          connectToServer(url);
+        }
+      }, 5000);
     });
 
-    newSocket.on('initial-data', (data) => {
+    // Socket event listeners
+    newSocket.on('classes-updated', (data) => {
       if (!mountedRef.current) return;
-      setClasses(data.classroomData);
-      setCurrentWeek(data.currentWeek);
-      setConnectedDevices(data.serverInfo.connectedDevices);
+      setClasses(data.classes);
     });
 
     newSocket.on('class-created', (data) => {
       if (!mountedRef.current) return;
       setClasses(prev => ({
         ...prev,
-        [data.className]: data.data
+        [data.className]: {
+          students: [],
+          currentWeek: data.currentWeek || 'Week 1'
+        }
       }));
     });
 
     newSocket.on('class-deleted', (data) => {
       if (!mountedRef.current) return;
       setClasses(prev => {
-        const updated = { ...prev };
-        delete updated[data.className];
-        return updated;
+        const newClasses = { ...prev };
+        delete newClasses[data.className];
+        return newClasses;
       });
-      setCurrentClass(prevClass => prevClass === data.className ? '' : prevClass);
+      if (currentClass === data.className) {
+        setCurrentClass('');
+      }
     });
 
     newSocket.on('student-added', (data) => {
@@ -194,9 +198,9 @@ const ClassroomTracker = () => {
           students: prev[data.className]?.students.filter(s => s.id !== data.studentId) || []
         }
       }));
-      
       setSelectedStudentIndex(prevIndex => {
-        if (data.studentIndex === prevIndex) return null;
+        if (prevIndex === null) return null;
+        if (prevIndex === data.studentIndex) return null;
         if (prevIndex !== null && prevIndex > data.studentIndex) return prevIndex - 1;
         return prevIndex;
       });
@@ -204,6 +208,14 @@ const ClassroomTracker = () => {
 
     newSocket.on('student-points-updated', (data) => {
       if (!mountedRef.current) return;
+      console.log('Received student-points-updated:', data);
+      
+      // Ensure we have valid data for individual student update
+      if (!data.studentId || typeof data.points !== 'number') {
+        console.error('Invalid student-points-updated data:', data);
+        return;
+      }
+      
       setClasses(prev => ({
         ...prev,
         [data.className]: {
@@ -245,6 +257,14 @@ const ClassroomTracker = () => {
 
     newSocket.on('all-points-updated', (data) => {
       if (!mountedRef.current) return;
+      console.log('Received all-points-updated:', data);
+      
+      // Ensure we have valid data for all-student update
+      if (typeof data.change !== 'number') {
+        console.error('Invalid all-points-updated data:', data);
+        return;
+      }
+      
       setClasses(prev => ({
         ...prev,
         [data.className]: {
@@ -279,26 +299,30 @@ const ClassroomTracker = () => {
 
     newSocket.on('data-reset', (data) => {
       if (!mountedRef.current) return;
-      setCurrentWeek(data.week);
-      loadClassData();
+      setClasses({});
+      setCurrentClass('');
+      setStudents([]);
     });
 
-    setSocket(newSocket);
-  }, []);
-
-  // Load class data
-  const loadClassData = useCallback(async () => {
     if (!serverUrl || !mountedRef.current) return;
-    
-    try {
-      const data = await apiCall('/api/classes');
-      if (data && mountedRef.current) {
-        setClasses(data);
+
+    // Load initial data
+    const loadInitialData = async () => {
+      try {
+        const response = await fetch(`${url}/api/classes`);
+        if (response.ok) {
+          const data = await response.json();
+          if (mountedRef.current) {
+            setClasses(data.classes);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load initial data:', error);
       }
-    } catch (error) {
-      console.error('Failed to load class data:', error);
-    }
-  }, [apiCall, serverUrl]);
+    };
+
+    loadInitialData();
+  }, []);
 
   // Update current students when class changes
   useEffect(() => {
@@ -314,17 +338,26 @@ const ClassroomTracker = () => {
     setSelectedStudentIndex(null);
   }, [currentClass, classes]);
 
-  // Toggle functions
-  const toggleControls = () => {
-    const newMinimizedState = !controlsMinimized;
-    setControlsMinimized(newMinimizedState);
-    localStorage.setItem('controlsMinimized', JSON.stringify(newMinimizedState));
+  // Update current week when class changes
+  useEffect(() => {
+    if (currentClass && classes[currentClass]) {
+      setCurrentWeek(classes[currentClass].currentWeek || 'Week 1');
+    } else {
+      setCurrentWeek('');
+    }
+  }, [currentClass, classes]);
+
+  // Save UI preferences
+  const toggleControlsMinimized = () => {
+    const newMinimized = !controlsMinimized;
+    setControlsMinimized(newMinimized);
+    localStorage.setItem('controlsMinimized', JSON.stringify(newMinimized));
   };
 
-  const toggleTools = () => {
-    const newToolsMinimizedState = !toolsMinimized;
-    setToolsMinimized(newToolsMinimizedState);
-    localStorage.setItem('toolsMinimized', JSON.stringify(newToolsMinimizedState));
+  const toggleToolsMinimized = () => {
+    const newToolsMinimized = !toolsMinimized;
+    setToolsMinimized(newToolsMinimized);
+    localStorage.setItem('toolsMinimized', JSON.stringify(newToolsMinimized));
   };
 
   const togglePresenterView = () => {
@@ -459,35 +492,25 @@ const ClassroomTracker = () => {
 
   // Random student selection
   const selectRandomStudent = () => {
-    if (students.length === 0 || !socketRef.current) {
-      alert('No students available to select!');
-      return;
-    }
-    
+    if (students.length === 0) return;
     const randomIndex = Math.floor(Math.random() * students.length);
-    const student = students[randomIndex];
+    setSelectedStudentIndex(randomIndex);
     
-    socketRef.current.emit('select-random-student', {
-      className: currentClass,
-      studentIndex: randomIndex,
-      studentId: student.id
-    });
-    
-    setTimeout(() => {
-      const studentCard = document.querySelector(`[data-student-index="${randomIndex}"]`);
-      if (studentCard) {
-        studentCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }, 100);
+    if (socketRef.current && currentClass) {
+      socketRef.current.emit('student-selected', {
+        className: currentClass,
+        studentIndex: randomIndex
+      });
+    }
   };
 
-  // Clear selection
   const clearSelection = () => {
-    if (!socketRef.current) return;
-    
-    socketRef.current.emit('clear-selection', {
-      className: currentClass
-    });
+    setSelectedStudentIndex(null);
+    if (socketRef.current && currentClass) {
+      socketRef.current.emit('selection-cleared', {
+        className: currentClass
+      });
+    }
   };
 
   // Update student profile
@@ -520,23 +543,21 @@ const ClassroomTracker = () => {
       return;
     }
     
-    try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64 = e.target.result;
-        
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64 = e.target.result;
+      try {
         await updateStudentProfile(studentIndex, {
           avatar: base64,
           hasCustomAvatar: true
         });
-      };
-      reader.readAsDataURL(file);
-      
-    } catch (error) {
-      console.error('Error processing image:', error);
-      alert('Failed to process image. Please try a different photo.');
-    }
+      } catch (error) {
+        alert('Failed to upload profile picture. Please try again.');
+      }
+    };
+    reader.readAsDataURL(file);
     
+    // Clear the input
     event.target.value = '';
   };
 
@@ -553,8 +574,8 @@ const ClassroomTracker = () => {
 
   // Export CSV
   const exportCSV = () => {
-    if (!students.length) {
-      alert('No students to export!');
+    if (students.length === 0) {
+      alert('No students to export');
       return;
     }
     
@@ -563,21 +584,15 @@ const ClassroomTracker = () => {
       ...students.map(s => `"${s.name}",${s.points}`)
     ].join('\n');
     
-    try {
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', `${currentClass || 'class'}-${currentWeek}-participation.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Export failed:', error);
-      alert('Export failed. Please try again.');
-    }
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentClass || 'classroom'}-${currentWeek || 'data'}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
   };
 
   // Import CSV
@@ -595,35 +610,52 @@ const ClassroomTracker = () => {
         return;
       }
       
-      try {
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(',');
-          const studentName = values[0]?.replace(/"/g, '').trim();
-          
-          if (studentName && mountedRef.current) {
-            await apiCall(`/api/classes/${encodeURIComponent(currentClass)}/students`, {
+      const header = lines[0].toLowerCase();
+      if (!header.includes('name')) {
+        alert('CSV must have a "Name" column.');
+        return;
+      }
+      
+      const hasPoints = header.includes('points');
+      const nameIndex = header.split(',').findIndex(col => col.trim().replace(/"/g, '').includes('name'));
+      const pointsIndex = hasPoints ? header.split(',').findIndex(col => col.trim().replace(/"/g, '').includes('points')) : -1;
+      
+      for (let i = 1; i < lines.length; i++) {
+        const columns = lines[i].split(',');
+        const name = columns[nameIndex]?.trim().replace(/"/g, '');
+        
+        if (name) {
+          try {
+            const studentData = {
+              name,
+              avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
+              hasCustomAvatar: false
+            };
+            
+            const result = await apiCall(`/api/classes/${encodeURIComponent(currentClass)}/students`, {
               method: 'POST',
-              body: JSON.stringify({
-                student: {
-                  name: studentName,
-                  avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${studentName}`,
-                  hasCustomAvatar: false
-                }
-              })
+              body: JSON.stringify({ student: studentData })
             });
             
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // If points column exists and student was added successfully, update points
+            if (hasPoints && pointsIndex >= 0 && result && result.student) {
+              const points = parseInt(columns[pointsIndex]?.trim().replace(/"/g, '')) || 0;
+              if (points > 0) {
+                await apiCall(`/api/classes/${encodeURIComponent(currentClass)}/students/${result.student.id}/points`, {
+                  method: 'PUT',
+                  body: JSON.stringify({ points: Math.max(0, Math.min(20, points)) })
+                });
+              }
+            }
+          } catch (error) {
+            console.error(`Failed to import student ${name}:`, error);
           }
         }
-        
-        if (mountedRef.current) {
-          alert(`Successfully imported ${lines.length - 1} students!`);
-        }
-      } catch (error) {
-        console.error('CSV import error:', error);
-        alert('Failed to import some students. Please check your connection and try again.');
       }
+      
+      alert(`Import completed! Added students from CSV.`);
     };
+    
     reader.readAsText(file);
     event.target.value = '';
   };
@@ -691,149 +723,121 @@ const ClassroomTracker = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Connection Status Bar */}
-        <div className={`mb-4 p-3 rounded-lg flex items-center justify-between text-sm transition-colors duration-200 ${
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      {/* Connection Status */}
+      <div className="fixed top-4 right-4 z-50">
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-medium ${
           isConnected 
-            ? 'bg-green-50 border border-green-200 text-green-800' 
-            : 'bg-red-50 border border-red-200 text-red-800'
+            ? 'bg-green-100 text-green-800 border border-green-200' 
+            : 'bg-red-100 text-red-800 border border-red-200'
         }`}>
-          <div className="flex items-center gap-2">
-            {isConnected ? <Wifi size={16} /> : <WifiOff size={16} />}
-            <span className="font-medium">
-              {isConnected ? 'Connected to server' : 'Disconnected from server'}
-            </span>
-            {isConnected && connectedDevices > 1 && (
-              <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs">
-                {connectedDevices} devices online
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {/* Presenter View Toggle */}
-            <button
-              onClick={togglePresenterView}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
-                presenterView 
-                  ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-              title={presenterView ? 'Exit Presenter View' : 'Enter Presenter View'}
-            >
-              {presenterView ? <Eye size={14} /> : <EyeOff size={14} />}
-              {presenterView ? 'Presenter View' : 'Normal View'}
-            </button>
-            
-            {!isConnected && (
+          {isConnected ? (
+            <>
+              <Wifi size={16} />
+              Connected
+            </>
+          ) : (
+            <>
+              <WifiOff size={16} />
+              Disconnected
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Connection Modal */}
+      {showConnectionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <Server className="text-red-500" size={24} />
+              <h2 className="text-xl font-bold text-gray-800">Connection Error</h2>
+            </div>
+            <p className="text-gray-600 mb-4">
+              {connectionError || 'Unable to connect to the server. Please check if the server is running.'}
+            </p>
+            <div className="flex gap-3">
               <button
-                onClick={() => connectToServer(serverUrl)}
-                className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-xs"
+                onClick={() => setShowConnectionModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
               >
-                Reconnect
+                Dismiss
               </button>
-            )}
+              <button
+                onClick={() => {
+                  setShowConnectionModal(false);
+                  connectToServer(serverUrl);
+                }}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                Retry
+              </button>
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Connection Error Modal */}
-        {showConnectionModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md mx-4">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                  <Server className="text-red-600" size={24} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Connection Error</h3>
-                  <p className="text-sm text-gray-600">Cannot connect to the server</p>
-                </div>
-              </div>
-              
-              <p className="text-gray-700 mb-4">
-                {connectionError}
-              </p>
-              
-              <div className="text-sm text-gray-600 mb-6">
-                <p><strong>Make sure:</strong></p>
-                <ul className="list-disc list-inside mt-2 space-y-1">
-                  <li>The server is running</li>
-                  <li>You're connected to the same network</li>
-                  <li>The server URL is correct</li>
-                </ul>
-              </div>
-              
-              <div className="flex gap-3 justify-end">
-                <button
-                  onClick={() => setShowConnectionModal(false)}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => connectToServer(serverUrl)}
-                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-                >
-                  Retry
-                </button>
-              </div>
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-gray-800 mb-2 flex items-center justify-center gap-3">
+            <Users className="text-blue-600" size={40} />
+            Classroom Participation Tracker
+          </h1>
+          <p className="text-gray-600">Track student participation with real-time updates</p>
+          {currentWeek && (
+            <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+              <Calendar size={16} />
+              {currentWeek}
+            </div>
+          )}
+        </div>
+
+        {/* Controls Panel */}
+        <div className="bg-white rounded-lg shadow-lg mb-6">
+          <div className="flex items-center justify-between p-4 border-b">
+            <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+              <Settings size={20} />
+              Controls
+            </h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={togglePresenterView}
+                className={`px-3 py-1 rounded-md text-sm font-medium flex items-center gap-2 ${
+                  presenterView 
+                    ? 'bg-purple-100 text-purple-800 border border-purple-200' 
+                    : 'bg-gray-100 text-gray-600 border border-gray-200'
+                }`}
+              >
+                {presenterView ? <Eye size={16} /> : <EyeOff size={16} />}
+                {presenterView ? 'Presenter View' : 'Normal View'}
+              </button>
+              <button
+                onClick={toggleControlsMinimized}
+                className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                {controlsMinimized ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
+              </button>
             </div>
           </div>
-        )}
-
-        {/* Header - Hide in presenter view or show minimal version */}
-        {(!presenterView || !currentClass) && (
-          <div className={`bg-white rounded-lg shadow-md transition-all duration-300 ease-in-out ${controlsMinimized ? 'mb-3' : 'mb-6'}`}>
-            {/* Always Visible Header Bar */}
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <h1 className={`font-bold text-gray-800 flex items-center gap-2 transition-all duration-300 ${controlsMinimized ? 'text-xl' : 'text-3xl'}`}>
-                    <Users className="text-blue-600" />
-                    {controlsMinimized ? 'Tracker' : 'Classroom Participation Tracker'}
-                    {!isConnected && <span className="text-red-500 text-sm">(Offline)</span>}
-                  </h1>
-                  
-                  {/* Minimized Info Display */}
-                  {controlsMinimized && currentClass && (
-                    <div className="flex items-center gap-4 text-sm text-gray-600">
-                      <span className="font-medium text-blue-600">{currentClass}</span>
-                      <span className="flex items-center gap-1">
-                        <Calendar size={14} />
-                        {currentWeek}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Users size={14} />
-                        {students.length} students
-                      </span>
-                    </div>
-                  )}
-                </div>
-                
-                {/* Toggle Button */}
-                <button
-                  onClick={toggleControls}
-                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex items-center gap-2 text-gray-600 hover:text-gray-800"
-                  title={controlsMinimized ? 'Show controls' : 'Hide controls'}
-                >
-                  <Settings size={16} />
-                  {controlsMinimized ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Collapsible Content */}
-            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${controlsMinimized ? 'max-h-0' : 'max-h-96'}`}>
-              <div className="p-6 pt-4">
+          
+          {!controlsMinimized && (
+            <div className="p-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Class Management */}
-                <div className="flex flex-wrap gap-4 items-center mb-4">
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+                    <Monitor size={18} />
+                    Class Management
+                  </h3>
+                  
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="New class name"
                       value={newClassName}
                       onChange={(e) => setNewClassName(e.target.value)}
-                      className="px-3 py-2 border rounded-md"
+                      placeholder="Enter class name"
+                      className="flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       onKeyPress={(e) => e.key === 'Enter' && createClass()}
                       disabled={!isConnected}
                     />
@@ -852,51 +856,78 @@ const ClassroomTracker = () => {
                     className="px-3 py-2 border rounded-md"
                     disabled={!isConnected}
                   >
-                    <option value="">Select a class...</option>
+                    <option value="">Select a class</option>
                     {Object.keys(classes).map(className => (
                       <option key={className} value={className}>{className}</option>
                     ))}
                   </select>
                 </div>
 
-                {/* Controls */}
+                {/* Student Management */}
                 {currentClass && (
                   <div className="space-y-4">
-                    {/* Add Student Section */}
-                    <div className="flex flex-wrap gap-3 items-center p-3 bg-gray-50 rounded-lg">
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          placeholder="Student name"
-                          value={newStudentName}
-                          onChange={(e) => setNewStudentName(e.target.value)}
-                          className="px-3 py-2 border rounded-md"
-                          onKeyPress={(e) => e.key === 'Enter' && addStudent()}
-                          disabled={!isConnected}
-                        />
-                        <button
-                          onClick={addStudent}
-                          disabled={!isConnected || isProcessingRef.current}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 flex items-center gap-2"
-                        >
-                          <UserPlus size={16} />
-                          Add Student
-                        </button>
-                      </div>
-                      
-                      <div className="text-sm text-gray-600">
-                        Students: {students.length}
-                      </div>
+                    <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+                      <UserPlus size={18} />
+                      Student Management
+                    </h3>
+                    
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newStudentName}
+                        onChange={(e) => setNewStudentName(e.target.value)}
+                        placeholder="Enter student name"
+                        className="flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        onKeyPress={(e) => e.key === 'Enter' && addStudent()}
+                        disabled={!isConnected}
+                      />
+                      <button
+                        onClick={addStudent}
+                        disabled={!isConnected || isProcessingRef.current}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 flex items-center gap-2"
+                      >
+                        <UserPlus size={16} />
+                        Add Student
+                      </button>
                     </div>
                     
-                    {/* Main Controls */}
-                    <div className="flex flex-wrap gap-3 items-center">
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Calendar size={16} />
-                        Week: {currentWeek}
-                      </div>
-                      
-                      <label className="px-4 py-2 bg-green-600 text-white rounded-md cursor-pointer hover:bg-green-700 flex items-center gap-2">
+                    <div className="text-sm text-gray-600">
+                      Students: {students.length}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Tools Panel */}
+        {currentClass && (
+          <div className="bg-white rounded-lg shadow-lg mb-6">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                <Target size={20} />
+                Tools
+              </h2>
+              <button
+                onClick={toggleToolsMinimized}
+                className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                {toolsMinimized ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
+              </button>
+            </div>
+            
+            {!toolsMinimized && (
+              <div className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Data Management */}
+                  <div className="space-y-3">
+                    <div className="font-semibold text-gray-700 text-sm">
+                      Data Management:
+                    </div>
+                    
+                    <div className="flex flex-col gap-2">
+                      <label className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 cursor-pointer flex items-center gap-2 text-center justify-center">
                         <Upload size={16} />
                         Import CSV
                         <input
@@ -926,248 +957,140 @@ const ClassroomTracker = () => {
                       </button>
                     </div>
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
 
-        {/* Minimal header in presenter view */}
-        {presenterView && currentClass && (
-          <div className="bg-white rounded-lg shadow-md mb-3 p-3">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <h2 className="text-xl font-bold text-gray-800">{currentClass}</h2>
-                <span className="text-sm text-gray-600">{currentWeek}</span>
-                <span className="text-sm text-gray-600">{students.length} students</span>
-              </div>
-              <button
-                onClick={togglePresenterView}
-                className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-xs flex items-center gap-1"
-              >
-                <EyeOff size={14} />
-                Exit Presenter View
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Tools Section - Hide in presenter view */}
-        {currentClass && !presenterView && (
-          <div className={`bg-white rounded-lg shadow-md transition-all duration-300 ease-in-out ${toolsMinimized ? 'mb-3' : 'mb-6'}`}>
-            {/* Tools Header Bar */}
-            <div className="p-4 border-b border-gray-200">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <h2 className={`font-semibold text-gray-700 flex items-center gap-2 transition-all duration-300 ${toolsMinimized ? 'text-lg' : 'text-xl'}`}>
-                    <Target className="text-purple-600" />
-                    Tools
-                  </h2>
-                  
-                  {/* Minimized Tools Info */}
-                  {toolsMinimized && (
-                    <div className="flex items-center gap-3 text-sm text-gray-600">
-                      <span>Random selection & class actions available</span>
+                  {/* Student Selection */}
+                  <div className="space-y-3">
+                    <div className="font-semibold text-gray-700 text-sm">
+                      Student Selection:
+                    </div>
+                    
+                    <div className="flex flex-col gap-2">
+                      <button
+                        onClick={selectRandomStudent}
+                        disabled={students.length === 0}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 flex items-center gap-2"
+                      >
+                        <Shuffle size={16} />
+                        Random Student
+                      </button>
+                      
+                      <button
+                        onClick={clearSelection}
+                        disabled={selectedStudentIndex === null}
+                        className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:bg-gray-300 flex items-center gap-2"
+                      >
+                        <X size={16} />
+                        Clear Selection
+                      </button>
+                      
                       {selectedStudentIndex !== null && (
-                        <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs font-medium">
-                          {students[selectedStudentIndex]?.name} selected
-                        </span>
+                        <div className="text-sm text-gray-600 text-center p-2 bg-indigo-50 rounded-md">
+                          Selected: {students[selectedStudentIndex]?.name}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
-                
-                {/* Tools Toggle Button */}
-                <button
-                  onClick={toggleTools}
-                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex items-center gap-2 text-gray-600 hover:text-gray-800"
-                  title={toolsMinimized ? 'Show tools' : 'Hide tools'}
-                >
-                  <Target size={16} />
-                  {toolsMinimized ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Collapsible Tools Content */}
-            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${toolsMinimized ? 'max-h-0' : 'max-h-96'}`}>
-              <div className="p-6 pt-4 space-y-4">
-                {/* Random Student Selection */}
-                <div className="flex flex-wrap gap-3 items-center">
-                  <div className="flex items-center gap-2 text-sm text-gray-600 mr-4">
-                    <Shuffle size={16} />
-                    Student Selection:
                   </div>
-                  
-                  <button
-                    onClick={selectRandomStudent}
-                    disabled={students.length === 0 || !isConnected}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 transition-colors duration-200"
-                  >
-                    <Shuffle size={16} />
-                    Random Student
-                  </button>
-                  
-                  {selectedStudentIndex !== null && (
-                    <button
-                      onClick={clearSelection}
-                      disabled={!isConnected}
-                      className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:bg-gray-300 flex items-center gap-2 transition-colors duration-200"
-                    >
-                      <X size={16} />
-                      Clear Selection
-                    </button>
-                  )}
-                  
-                  {selectedStudentIndex !== null && (
-                    <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 flex items-center gap-2">
-                      <Target size={16} className="text-purple-600" />
-                      <span className="text-purple-700 font-medium">
-                        Selected: {students[selectedStudentIndex]?.name}
-                      </span>
+
+                  {/* Class Actions */}
+                  <div className="space-y-3">
+                    <div className="font-semibold text-gray-700 text-sm">
+                      Class Actions:
                     </div>
-                  )}
-                </div>
-
-                {/* Class-wide Actions */}
-                <div className="flex flex-wrap gap-3 items-center border-t pt-4">
-                  <div className="flex items-center gap-2 text-sm text-gray-600 mr-4">
-                    <Users size={16} />
-                    Class Actions:
-                  </div>
-                  
-                  <button
-                    onClick={addPointToAll}
-                    disabled={students.length === 0 || !isConnected || isProcessingRef.current}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 transition-colors duration-200"
-                  >
-                    <Plus size={16} />
-                    All +1
-                  </button>
-                  
-                  <button
-                    onClick={subtractPointFromAll}
-                    disabled={students.length === 0 || !isConnected || isProcessingRef.current}
-                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 transition-colors duration-200"
-                  >
-                    <Minus size={16} />
-                    All -1
-                  </button>
-                  
-                  <div className="text-sm text-gray-500">
-                    Affects all {students.length} students
+                    
+                    <button
+                      onClick={addPointToAll}
+                      disabled={students.length === 0 || !isConnected || isProcessingRef.current}
+                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 transition-colors duration-200"
+                    >
+                      <Plus size={16} />
+                      All +1
+                    </button>
+                    
+                    <button
+                      onClick={subtractPointFromAll}
+                      disabled={students.length === 0 || !isConnected || isProcessingRef.current}
+                      className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 transition-colors duration-200"
+                    >
+                      <Minus size={16} />
+                      All -1
+                    </button>
+                    
+                    <div className="text-sm text-gray-500">
+                      Affects all {students.length} students
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
-        {/* Students Grid - Different layouts for presenter vs normal view */}
-        {currentClass ? (
-          <>
-            {presenterView ? (
-              // Presenter View - Compact grid
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2">
-                {students.map((student, index) => (
-                  <div 
-                    key={student.id} 
-                    data-student-index={index}
-                    className={`${getCardBgColor(student.points)} rounded-lg p-3 text-center relative transition-all duration-300 border-2 ${
-                      selectedStudentIndex === index 
-                        ? 'border-purple-500 shadow-lg transform scale-105 z-10' 
-                        : 'border-transparent'
-                    }`}
-                  >
-                    {/* Selection Indicator for presenter view */}
-                    {selectedStudentIndex === index && (
-                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-purple-600 text-white rounded-full flex items-center justify-center animate-pulse">
-                        <Target size={10} />
-                      </div>
-                    )}
-                    
-                    {/* Student Name */}
-                    <div className="font-semibold text-gray-800 text-sm mb-1 truncate px-1" title={student.name}>
-                      {student.name}
-                    </div>
-                    
-                    {/* Large Points Display */}
-                    <div className={`text-2xl font-bold ${getPointColor(student.points)}`}>
-                      {student.points}
-                    </div>
-                    
-                    {/* Mini progress bar */}
-                    <div className="w-full bg-gray-200 rounded-full h-1 mt-2">
-                      <div 
-                        className={`h-1 rounded-full transition-all duration-300 ${
-                          student.points === 0 ? 'bg-gray-400' :
-                          student.points <= 5 ? 'bg-green-400' :
-                          student.points <= 10 ? 'bg-blue-400' :
-                          student.points <= 15 ? 'bg-purple-400' :
-                          'bg-yellow-400'
-                        }`}
-                        style={{ width: `${(student.points / 20) * 100}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                ))}
+        {/* Students Grid */}
+        {currentClass && (
+          <div className="bg-white rounded-lg shadow-lg">
+            <div className="p-4 border-b">
+              <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                <Users size={20} />
+                {currentClass} - Students ({students.length})
+              </h2>
+            </div>
+            
+            {students.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                <Users size={48} className="mx-auto mb-4 opacity-50" />
+                <p>No students added yet. Add your first student above!</p>
               </div>
             ) : (
-              // Normal View - Original layout
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+              <div className={`p-6 ${
+                presenterView 
+                  ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4' 
+                  : 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4'
+              }`}>
                 {students.map((student, index) => (
-                  <div 
-                    key={student.id} 
-                    data-student-index={index}
-                    className={`bg-white rounded-lg shadow-md p-6 text-center relative group transition-all duration-300 ${
-                      selectedStudentIndex === index 
-                        ? 'ring-4 ring-purple-400 ring-opacity-75 bg-purple-50 shadow-lg transform scale-105' 
-                        : 'hover:shadow-lg'
+                  <div
+                    key={student.id}
+                    className={`relative p-4 rounded-lg border-2 transition-all duration-300 ${
+                      selectedStudentIndex === index
+                        ? 'border-indigo-500 bg-indigo-50 shadow-lg transform scale-105'
+                        : presenterView
+                        ? `border-gray-200 ${getCardBgColor(student.points)} hover:shadow-md`
+                        : 'border-gray-200 bg-white hover:shadow-md'
                     }`}
                   >
-                    {/* Selection Indicator */}
-                    {selectedStudentIndex === index && (
-                      <div className="absolute -top-2 -right-2 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg animate-pulse">
-                        <Target size={16} />
-                      </div>
-                    )}
-                    
                     {/* Delete Button */}
                     <button
                       onClick={() => setShowDeleteConfirm(index)}
-                      disabled={!isConnected}
-                      className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:bg-gray-300 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-200"
                       title="Delete student"
                     >
                       <Trash2 size={12} />
                     </button>
                     
-                    {/* Profile Picture with Upload */}
-                    <div className="relative group mb-4">
-                      <img
-                        src={student.avatar}
-                        alt={student.name}
-                        className="w-24 h-24 rounded-full mx-auto bg-gray-100 object-cover shadow-md"
-                      />
-                      
-                      {/* Upload overlay */}
-                      {isConnected && (
-                        <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
-                          <Camera size={24} className="text-white" />
-                        </div>
-                      )}
-                      
-                      {/* Hidden file input */}
-                      {isConnected && (
-                        <input
-                          ref={el => fileInputRefs.current[student.id] = el}
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => uploadProfilePic(index, e)}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                          disabled={isProcessingRef.current}
+                    {/* Avatar */}
+                    <div className="relative mb-3 flex justify-center">
+                      <div className="relative">
+                        <img
+                          src={student.avatar}
+                          alt={student.name}
+                          className={`w-16 h-16 rounded-full border-4 ${
+                            selectedStudentIndex === index
+                              ? 'border-indigo-400'
+                              : 'border-gray-300'
+                          }`}
                         />
-                      )}
+                        
+                        {/* Upload overlay for custom avatars */}
+                        {isConnected && (
+                          <input
+                            ref={el => fileInputRefs.current[student.id] = el}
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => uploadProfilePic(index, e)}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            disabled={isProcessingRef.current}
+                          />
+                        )}
+                      </div>
                       
                       {/* Reset button for custom avatars */}
                       {student.hasCustomAvatar && isConnected && (
@@ -1192,14 +1115,35 @@ const ClassroomTracker = () => {
                       </div>
                     </div>
                     
-                    <h3 className="font-bold text-gray-800 mb-3 text-lg leading-tight px-1 min-h-[3rem] flex items-center justify-center">
-                      <span className="text-center">{student.name}</span>
+                    {/* Student Name */}
+                    <h3 className={`text-center font-medium mb-3 ${
+                      presenterView ? `text-lg ${getPointColor(student.points)}` : 'text-sm text-gray-800'
+                    }`}>
+                      {student.name}
                     </h3>
                     
                     {/* Participation Lights */}
                     <div className="flex justify-center gap-1 mb-4">
                       {renderLights(student.points)}
                     </div>
+                    
+                    {/* Progress Bar for Presenter View */}
+                    {presenterView && (
+                      <div className="mb-4">
+                        <div className="w-full bg-gray-200 rounded-full h-1 mt-2">
+                          <div 
+                            className={`h-1 rounded-full transition-all duration-300 ${
+                              student.points === 0 ? 'bg-gray-400' :
+                              student.points <= 5 ? 'bg-green-400' :
+                              student.points <= 10 ? 'bg-blue-400' :
+                              student.points <= 15 ? 'bg-purple-400' :
+                              'bg-yellow-400'
+                            }`}
+                            style={{ width: `${(student.points / 20) * 100}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    )}
                     
                     {/* Control Buttons */}
                     <div className="flex gap-2 justify-center mt-2">
@@ -1223,61 +1167,34 @@ const ClassroomTracker = () => {
                 ))}
               </div>
             )}
+          </div>
+        )}
 
-            {/* Delete Confirmation Modal */}
-            {showDeleteConfirm !== null && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg p-6 max-w-md mx-4">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                      <Trash2 className="text-red-600" size={24} />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">Delete Student</h3>
-                      <p className="text-sm text-gray-600">This action cannot be undone</p>
-                    </div>
-                  </div>
-                  
-                  <p className="text-gray-700 mb-6">
-                    Are you sure you want to delete{' '}
-                    <span className="font-semibold">
-                      {students[showDeleteConfirm]?.name}
-                    </span>
-                    ? All their participation data will be permanently removed.
-                  </p>
-                  
-                  <div className="flex gap-3 justify-end">
-                    <button
-                      onClick={() => setShowDeleteConfirm(null)}
-                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={confirmDeleteStudent}
-                      disabled={!isConnected || isProcessingRef.current}
-                      className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-300 flex items-center gap-2"
-                    >
-                      <Trash2 size={16} />
-                      Delete Student
-                    </button>
-                  </div>
-                </div>
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm !== null && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold mb-4">Delete Student</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to delete <strong>{students[showDeleteConfirm]?.name}</strong>? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowDeleteConfirm(null)}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteStudent}
+                  disabled={!isConnected || isProcessingRef.current}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-300 flex items-center gap-2"
+                >
+                  <Trash2 size={16} />
+                  Delete Student
+                </button>
               </div>
-            )}
-          </>
-        ) : (
-          <div className="text-center py-12">
-            <Users className="mx-auto text-gray-400 mb-4" size={64} />
-            <h2 className="text-xl text-gray-600 mb-2">
-              {isConnected ? 'No class selected' : 'Waiting for server connection'}
-            </h2>
-            <p className="text-gray-500">
-              {isConnected 
-                ? 'Create a new class or select an existing one to get started!' 
-                : 'Please make sure the server is running and you are connected to the network.'
-              }
-            </p>
+            </div>
           </div>
         )}
       </div>

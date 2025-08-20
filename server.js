@@ -49,97 +49,101 @@ const saveDataToFile = () => {
 // Auto-save every 30 seconds
 setInterval(saveDataToFile, 30000);
 
-// Utility functions
-const getWeekKey = () => {
-  const now = new Date();
-  const yearStart = new Date(now.getFullYear(), 0, 1);
-  const weekNum = Math.ceil(((now - yearStart) / 86400000 + yearStart.getDay() + 1) / 7);
-  return `${now.getFullYear()}-W${weekNum}`;
-};
-
-const getLocalIP = () => {
-  const nets = os.networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name]) {
-      if (net.family === 'IPv4' && !net.internal) {
-        return net.address;
+// Helper function to get network IP
+const getNetworkIP = () => {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const interface of interfaces[name]) {
+      if (interface.family === 'IPv4' && !interface.internal) {
+        return interface.address;
       }
     }
   }
   return 'localhost';
 };
 
-// Initialize week check for all classes
-const checkAndResetWeek = () => {
-  const currentWeek = getWeekKey();
-  let dataChanged = false;
-
-  Object.keys(classroomData).forEach(className => {
-    if (classroomData[className].lastWeek !== currentWeek) {
-      // Archive current week data
-      if (!classroomData[className].weeklyHistory) {
-        classroomData[className].weeklyHistory = {};
-      }
-      
-      if (classroomData[className].lastWeek) {
-        classroomData[className].weeklyHistory[classroomData[className].lastWeek] = 
-          classroomData[className].students.map(s => ({ name: s.name, points: s.points }));
-      }
-      
-      // Reset points for new week
-      classroomData[className].students.forEach(student => {
-        student.points = 0;
-      });
-      
-      classroomData[className].lastWeek = currentWeek;
-      dataChanged = true;
-    }
-  });
-
-  if (dataChanged) {
-    saveDataToFile();
-    io.emit('data-reset', { week: currentWeek });
-  }
+// Generate unique ID
+const generateId = () => {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
 };
 
-// Check for week reset on startup and every hour
-checkAndResetWeek();
-setInterval(checkAndResetWeek, 3600000); // Check every hour
+// Initialize sample data if empty
+if (Object.keys(classroomData).length === 0) {
+  classroomData = {
+    "Sample Class": {
+      students: [
+        {
+          id: generateId(),
+          name: "Alice Johnson",
+          points: 3,
+          avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alice Johnson",
+          hasCustomAvatar: false,
+          lastUpdated: new Date().toISOString()
+        },
+        {
+          id: generateId(),
+          name: "Bob Smith",
+          points: 7,
+          avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Bob Smith",
+          hasCustomAvatar: false,
+          lastUpdated: new Date().toISOString()
+        },
+        {
+          id: generateId(),
+          name: "Carol Davis",
+          points: 12,
+          avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Carol Davis",
+          hasCustomAvatar: false,
+          lastUpdated: new Date().toISOString()
+        }
+      ],
+      currentWeek: "Week 1",
+      lastUpdated: new Date().toISOString()
+    }
+  };
+  saveDataToFile();
+}
 
 // API Routes
+
+// Health check
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
-    server: 'Classroom Participation Tracker',
-    ip: getLocalIP(),
-    week: getWeekKey(),
-    devices: connectedDevices.size
+    timestamp: new Date().toISOString(),
+    connectedDevices: connectedDevices.size
   });
 });
 
+// Get all classes
 app.get('/api/classes', (req, res) => {
-  res.json(classroomData);
+  res.json({ classes: classroomData });
 });
 
+// Create new class
 app.post('/api/classes', (req, res) => {
   const { className } = req.body;
   
-  if (!className || classroomData[className]) {
-    return res.status(400).json({ error: 'Class name required or already exists' });
+  if (!className || typeof className !== 'string') {
+    return res.status(400).json({ error: 'Class name is required' });
+  }
+  
+  if (classroomData[className]) {
+    return res.status(409).json({ error: 'Class already exists' });
   }
   
   classroomData[className] = {
     students: [],
-    lastWeek: getWeekKey(),
-    weeklyHistory: {},
-    createdAt: new Date().toISOString()
+    currentWeek: 'Week 1',
+    lastUpdated: new Date().toISOString()
   };
   
   saveDataToFile();
-  io.emit('class-created', { className, data: classroomData[className] });
+  io.emit('class-created', { className, currentWeek: 'Week 1' });
   res.json({ success: true, className });
 });
 
+// Delete class
 app.delete('/api/classes/:className', (req, res) => {
   const { className } = req.params;
   
@@ -153,6 +157,7 @@ app.delete('/api/classes/:className', (req, res) => {
   res.json({ success: true });
 });
 
+// Get students in a class
 app.get('/api/classes/:className/students', (req, res) => {
   const { className } = req.params;
   
@@ -160,9 +165,13 @@ app.get('/api/classes/:className/students', (req, res) => {
     return res.status(404).json({ error: 'Class not found' });
   }
   
-  res.json(classroomData[className].students);
+  res.json({ 
+    students: classroomData[className].students.map(s => ({ name: s.name, points: s.points })),
+    currentWeek: classroomData[className].currentWeek
+  });
 });
 
+// Add student to class
 app.post('/api/classes/:className/students', (req, res) => {
   const { className } = req.params;
   const { student } = req.body;
@@ -171,22 +180,28 @@ app.post('/api/classes/:className/students', (req, res) => {
     return res.status(404).json({ error: 'Class not found' });
   }
   
+  if (!student || !student.name) {
+    return res.status(400).json({ error: 'Student name is required' });
+  }
+  
   const newStudent = {
-    id: Date.now(),
+    id: generateId(),
     name: student.name,
+    points: 0,
     avatar: student.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${student.name}`,
     hasCustomAvatar: student.hasCustomAvatar || false,
-    points: 0,
-    createdAt: new Date().toISOString()
+    lastUpdated: new Date().toISOString()
   };
   
   classroomData[className].students.push(newStudent);
+  classroomData[className].lastUpdated = new Date().toISOString();
   saveDataToFile();
   
   io.emit('student-added', { className, student: newStudent });
   res.json({ success: true, student: newStudent });
 });
 
+// Delete student from class
 app.delete('/api/classes/:className/students/:studentId', (req, res) => {
   const { className, studentId } = req.params;
   
@@ -200,6 +215,7 @@ app.delete('/api/classes/:className/students/:studentId', (req, res) => {
   }
   
   const deletedStudent = classroomData[className].students.splice(studentIndex, 1)[0];
+  classroomData[className].lastUpdated = new Date().toISOString();
   saveDataToFile();
   
   io.emit('student-deleted', { className, studentId, studentIndex });
@@ -233,7 +249,6 @@ app.put('/api/classes/:className/students/:studentId/points', (req, res) => {
     className, 
     studentId, 
     points: student.points,
-    change: change || 0,
     timestamp: student.lastUpdated
   });
   
@@ -254,20 +269,22 @@ app.put('/api/classes/:className/students/:studentId', (req, res) => {
   }
   
   // Update allowed fields
-  const allowedFields = ['name', 'avatar', 'hasCustomAvatar'];
-  allowedFields.forEach(field => {
+  const allowedUpdates = ['name', 'avatar', 'hasCustomAvatar'];
+  allowedUpdates.forEach(field => {
     if (updates[field] !== undefined) {
       student[field] = updates[field];
     }
   });
   
   student.lastUpdated = new Date().toISOString();
+  classroomData[className].lastUpdated = new Date().toISOString();
   saveDataToFile();
   
-  io.emit('student-updated', { className, studentId, updates: student });
+  io.emit('student-updated', { className, studentId, updates });
   res.json({ success: true, student });
 });
 
+// Reset week (set all points to 0)
 app.post('/api/classes/:className/reset-week', (req, res) => {
   const { className } = req.params;
   
@@ -275,13 +292,15 @@ app.post('/api/classes/:className/reset-week', (req, res) => {
     return res.status(404).json({ error: 'Class not found' });
   }
   
-  // Reset all student points
+  // Reset points for new week
   classroomData[className].students.forEach(student => {
     student.points = 0;
     student.lastUpdated = new Date().toISOString();
   });
   
+  classroomData[className].lastUpdated = new Date().toISOString();
   saveDataToFile();
+  
   io.emit('week-reset', { className });
   res.json({ success: true });
 });
@@ -318,73 +337,51 @@ io.on('connection', (socket) => {
   };
   
   connectedDevices.set(socket.id, deviceInfo);
-  console.log(`📱 Device connected: ${socket.id} (${connectedDevices.size} total devices)`);
+  console.log(`📱 Device connected: ${socket.id} (Total: ${connectedDevices.size})`);
   
-  // Send current data to newly connected device
-  socket.emit('initial-data', {
-    classroomData,
-    currentWeek: getWeekKey(),
-    serverInfo: {
-      ip: getLocalIP(),
-      connectedDevices: connectedDevices.size
-    }
+  // Send current data to newly connected client
+  socket.emit('classes-updated', { classes: classroomData });
+  
+  // Handle student selection broadcasting
+  socket.on('student-selected', (data) => {
+    socket.broadcast.emit('student-selected', data);
   });
   
-  // Handle random student selection
-  socket.on('select-random-student', (data) => {
-    io.emit('student-selected', {
-      className: data.className,
-      studentIndex: data.studentIndex,
-      studentId: data.studentId,
-      timestamp: new Date().toISOString()
-    });
-  });
-  
-  // Handle selection clearing
-  socket.on('clear-selection', (data) => {
-    io.emit('selection-cleared', {
-      className: data.className,
-      timestamp: new Date().toISOString()
-    });
-  });
-  
-  // Handle device ping (for connection monitoring)
-  socket.on('ping', () => {
-    socket.emit('pong', { timestamp: new Date().toISOString() });
+  socket.on('selection-cleared', (data) => {
+    socket.broadcast.emit('selection-cleared', data);
   });
   
   socket.on('disconnect', () => {
     connectedDevices.delete(socket.id);
-    console.log(`📱 Device disconnected: ${socket.id} (${connectedDevices.size} total devices)`);
+    console.log(`📱 Device disconnected: ${socket.id} (Total: ${connectedDevices.size})`);
   });
 });
 
-// Serve React app for all non-API routes
+// Serve React app for all other routes
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'build', 'index.html'));
+});
+
+// Start server
+const PORT = process.env.PORT || 3001;
+const networkIP = getNetworkIP();
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log('🚀 Classroom Participation Tracker Server Started!');
+  console.log(`📡 Server running on:`);
+  console.log(`   Local:   http://localhost:${PORT}`);
+  console.log(`   Network: http://${networkIP}:${PORT}`);
+  console.log(`📊 Classes loaded: ${Object.keys(classroomData).length}`);
+  console.log(`👥 Total students: ${Object.values(classroomData).reduce((sum, cls) => sum + cls.students.length, 0)}`);
+  console.log('\n💡 Connect multiple devices to the same network and use the Network URL for real-time sync!');
 });
 
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\n🛑 Shutting down server...');
   saveDataToFile();
-  process.exit(0);
-});
-
-const PORT = process.env.PORT || 3001;
-const HOST = '0.0.0.0'; // Listen on all network interfaces
-
-server.listen(PORT, HOST, () => {
-  const localIP = getLocalIP();
-  console.log('\n🚀 Classroom Participation Tracker Server Started!');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`📍 Local access:     http://localhost:${PORT}`);
-  console.log(`🌐 Network access:   http://${localIP}:${PORT}`);
-  console.log(`📊 Health check:     http://${localIP}:${PORT}/api/health`);
-  console.log(`📅 Current week:     ${getWeekKey()}`);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('\n📱 Connect devices to the network URL above');
-  console.log('⚡ Real-time sync enabled across all devices');
-  console.log('💾 Data auto-saves every 30 seconds');
-  console.log('\nPress Ctrl+C to stop the server\n');
+  server.close(() => {
+    console.log('✅ Server shut down gracefully');
+    process.exit(0);
+  });
 });
