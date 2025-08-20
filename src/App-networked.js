@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Plus, Minus, Download, Upload, RotateCcw, Users, Calendar, Camera, UserPlus, Trash2, X, ChevronUp, ChevronDown, Settings, Shuffle, Target, Wifi, WifiOff, Server } from 'lucide-react';
+import { Plus, Minus, Download, Upload, RotateCcw, Users, Calendar, Camera, UserPlus, Trash2, X, ChevronUp, ChevronDown, Settings, Shuffle, Target, Wifi, WifiOff, Server, Monitor, Eye, EyeOff } from 'lucide-react';
 import io from 'socket.io-client';
 
 const ClassroomTracker = () => {
@@ -13,6 +13,7 @@ const ClassroomTracker = () => {
   const [controlsMinimized, setControlsMinimized] = useState(false);
   const [toolsMinimized, setToolsMinimized] = useState(false);
   const [selectedStudentIndex, setSelectedStudentIndex] = useState(null);
+  const [presenterView, setPresenterView] = useState(false);
   
   // Network-related state
   const [socket, setSocket] = useState(null);
@@ -24,7 +25,7 @@ const ClassroomTracker = () => {
   
   const fileInputRefs = useRef({});
   const reconnectTimeoutRef = useRef(null);
-  const [processingOperations, setProcessingOperations] = useState(new Set());
+  const isProcessingRef = useRef(false);
   const socketRef = useRef(null);
   const mountedRef = useRef(true);
 
@@ -36,8 +37,15 @@ const ClassroomTracker = () => {
     return serverUrl;
   }, []);
 
-  // API helper functions
+  // API helper functions with processing flag
   const apiCall = useCallback(async (endpoint, options = {}) => {
+    if (isProcessingRef.current) {
+      console.log('Skipping API call - already processing');
+      return null;
+    }
+    
+    isProcessingRef.current = true;
+    
     const url = `${serverUrl}${endpoint}`;
     const config = {
       headers: {
@@ -52,11 +60,19 @@ const ClassroomTracker = () => {
       if (!response.ok) {
         throw new Error(`API call failed: ${response.status}`);
       }
-      return await response.json();
+      const result = await response.json();
+      
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      return result;
     } catch (error) {
       console.error('API call error:', error);
       setConnectionError(`API Error: ${error.message}`);
       throw error;
+    } finally {
+      setTimeout(() => {
+        isProcessingRef.current = false;
+      }, 100);
     }
   }, [serverUrl]);
 
@@ -66,18 +82,18 @@ const ClassroomTracker = () => {
     
     const savedMinimized = JSON.parse(localStorage.getItem('controlsMinimized') || 'false');
     const savedToolsMinimized = JSON.parse(localStorage.getItem('toolsMinimized') || 'false');
+    const savedPresenterView = JSON.parse(localStorage.getItem('presenterView') || 'false');
     setControlsMinimized(savedMinimized);
     setToolsMinimized(savedToolsMinimized);
+    setPresenterView(savedPresenterView);
 
     const detectedUrl = detectServerUrl();
     setServerUrl(detectedUrl);
     
-    // Only connect if we don't have an existing socket
     if (!socketRef.current) {
       connectToServer(detectedUrl);
     }
     
-    // Cleanup on unmount
     return () => {
       mountedRef.current = false;
       if (socketRef.current) {
@@ -88,11 +104,10 @@ const ClassroomTracker = () => {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, []); // Empty dependency array - only run once
+  }, []);
 
   // Connect to server - fixed to prevent duplicate listeners
   const connectToServer = useCallback((url) => {
-    // Clean up existing socket if any
     if (socketRef.current) {
       console.log('Cleaning up existing socket');
       socketRef.current.removeAllListeners();
@@ -110,10 +125,8 @@ const ClassroomTracker = () => {
       reconnectionDelay: 1000
     });
 
-    // Store socket in ref
     socketRef.current = newSocket;
 
-    // Connection events
     newSocket.on('connect', () => {
       if (!mountedRef.current) return;
       console.log('✅ Connected to server');
@@ -136,7 +149,6 @@ const ClassroomTracker = () => {
       setShowConnectionModal(true);
     });
 
-    // Listen for initial data
     newSocket.on('initial-data', (data) => {
       if (!mountedRef.current) return;
       setClasses(data.classroomData);
@@ -144,7 +156,6 @@ const ClassroomTracker = () => {
       setConnectedDevices(data.serverInfo.connectedDevices);
     });
 
-    // Real-time event listeners - all check mountedRef
     newSocket.on('class-created', (data) => {
       if (!mountedRef.current) return;
       setClasses(prev => ({
@@ -184,7 +195,6 @@ const ClassroomTracker = () => {
         }
       }));
       
-      // Clear selection if deleted student was selected
       setSelectedStudentIndex(prevIndex => {
         if (data.studentIndex === prevIndex) return null;
         if (prevIndex !== null && prevIndex > data.studentIndex) return prevIndex - 1;
@@ -274,7 +284,7 @@ const ClassroomTracker = () => {
     });
 
     setSocket(newSocket);
-  }, []); // Empty dependencies - only create once
+  }, []);
 
   // Load class data
   const loadClassData = useCallback(async () => {
@@ -290,7 +300,7 @@ const ClassroomTracker = () => {
     }
   }, [apiCall, serverUrl]);
 
-  // Update current students when class changes - with cleanup
+  // Update current students when class changes
   useEffect(() => {
     if (!mountedRef.current) return;
     
@@ -304,7 +314,7 @@ const ClassroomTracker = () => {
     setSelectedStudentIndex(null);
   }, [currentClass, classes]);
 
-  // Save minimized state to localStorage
+  // Toggle functions
   const toggleControls = () => {
     const newMinimizedState = !controlsMinimized;
     setControlsMinimized(newMinimizedState);
@@ -317,9 +327,15 @@ const ClassroomTracker = () => {
     localStorage.setItem('toolsMinimized', JSON.stringify(newToolsMinimizedState));
   };
 
-  // Create new class - with processing flag
+  const togglePresenterView = () => {
+    const newPresenterView = !presenterView;
+    setPresenterView(newPresenterView);
+    localStorage.setItem('presenterView', JSON.stringify(newPresenterView));
+  };
+
+  // Create new class
   const createClass = async () => {
-    if (!newClassName.trim() || !isConnected) return;
+    if (!newClassName.trim() || !isConnected || isProcessingRef.current) return;
     
     try {
       const result = await apiCall('/api/classes', {
@@ -336,30 +352,12 @@ const ClassroomTracker = () => {
     }
   };
 
-  // Add/remove points - with optimistic updates
+  // Add/remove points
   const updatePoints = async (studentIndex, change) => {
-    if (!currentClass || !isConnected || !students[studentIndex]) return;
+    if (!currentClass || !isConnected || !students[studentIndex] || isProcessingRef.current) return;
     
     const student = students[studentIndex];
-    const operationKey = `points-${student.id}-${change}`;
-    
-    // Check if this specific operation is already in progress
-    if (processingOperations.has(operationKey)) return;
-    
     console.log('Updating points for student:', student.name, 'change:', change);
-    
-    // Calculate new points value
-    const newPoints = Math.max(0, Math.min(20, student.points + change));
-    
-    // Optimistic update - update local state immediately
-    setStudents(prev => prev.map((s, idx) => 
-      idx === studentIndex 
-        ? { ...s, points: newPoints }
-        : s
-    ));
-    
-    // Mark this operation as processing
-    setProcessingOperations(prev => new Set(prev).add(operationKey));
     
     try {
       const result = await apiCall(`/api/classes/${encodeURIComponent(currentClass)}/students/${student.id}/points`, {
@@ -371,27 +369,14 @@ const ClassroomTracker = () => {
         console.log('Points update result:', result);
       }
     } catch (error) {
-      // Revert the optimistic update on error
-      setStudents(prev => prev.map((s, idx) => 
-        idx === studentIndex 
-          ? { ...s, points: student.points }
-          : s
-      ));
       console.error('Points update error:', error);
       alert('Failed to update points. Please check your connection.');
-    } finally {
-      // Remove the operation from processing set
-      setProcessingOperations(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(operationKey);
-        return newSet;
-      });
     }
   };
 
   // Add new student
   const addStudent = async () => {
-    if (!newStudentName.trim() || !currentClass || !isConnected) return;
+    if (!newStudentName.trim() || !currentClass || !isConnected || isProcessingRef.current) return;
     
     try {
       const result = await apiCall(`/api/classes/${encodeURIComponent(currentClass)}/students`, {
@@ -413,9 +398,9 @@ const ClassroomTracker = () => {
     }
   };
 
-  // Delete student - with processing flag
+  // Delete student
   const confirmDeleteStudent = async () => {
-    if (showDeleteConfirm === null || !currentClass || !isConnected) return;
+    if (showDeleteConfirm === null || !currentClass || !isConnected || isProcessingRef.current) return;
     
     const student = students[showDeleteConfirm];
     try {
@@ -431,9 +416,9 @@ const ClassroomTracker = () => {
     }
   };
 
-  // Reset week - with processing flag
+  // Reset week
   const resetWeek = async () => {
-    if (!currentClass || !isConnected) return;
+    if (!currentClass || !isConnected || isProcessingRef.current) return;
     
     try {
       await apiCall(`/api/classes/${encodeURIComponent(currentClass)}/reset-week`, {
@@ -444,23 +429,9 @@ const ClassroomTracker = () => {
     }
   };
 
-  // Add points to all students - with optimistic updates
+  // Add points to all students
   const addPointToAll = async () => {
-    if (!currentClass || students.length === 0 || !isConnected) return;
-    
-    const operationKey = 'add-all-points';
-    
-    // Check if this operation is already in progress
-    if (processingOperations.has(operationKey)) return;
-    
-    // Optimistic update - update local state immediately
-    setStudents(prev => prev.map(student => ({
-      ...student,
-      points: Math.max(0, Math.min(20, student.points + 1))
-    })));
-    
-    // Mark this operation as processing
-    setProcessingOperations(prev => new Set(prev).add(operationKey));
+    if (!currentClass || students.length === 0 || !isConnected || isProcessingRef.current) return;
     
     try {
       await apiCall(`/api/classes/${encodeURIComponent(currentClass)}/all-points`, {
@@ -468,39 +439,13 @@ const ClassroomTracker = () => {
         body: JSON.stringify({ change: 1 })
       });
     } catch (error) {
-      // Revert the optimistic update on error
-      setStudents(prev => prev.map(student => ({
-        ...student,
-        points: Math.max(0, Math.min(20, student.points - 1))
-      })));
       alert('Failed to update all students. Please check your connection.');
-    } finally {
-      // Remove the operation from processing set
-      setProcessingOperations(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(operationKey);
-        return newSet;
-      });
     }
   };
 
-  // Subtract points from all students - with optimistic updates
+  // Subtract points from all students
   const subtractPointFromAll = async () => {
-    if (!currentClass || students.length === 0 || !isConnected) return;
-    
-    const operationKey = 'subtract-all-points';
-    
-    // Check if this operation is already in progress
-    if (processingOperations.has(operationKey)) return;
-    
-    // Optimistic update - update local state immediately
-    setStudents(prev => prev.map(student => ({
-      ...student,
-      points: Math.max(0, Math.min(20, student.points - 1))
-    })));
-    
-    // Mark this operation as processing
-    setProcessingOperations(prev => new Set(prev).add(operationKey));
+    if (!currentClass || students.length === 0 || !isConnected || isProcessingRef.current) return;
     
     try {
       await apiCall(`/api/classes/${encodeURIComponent(currentClass)}/all-points`, {
@@ -508,23 +453,11 @@ const ClassroomTracker = () => {
         body: JSON.stringify({ change: -1 })
       });
     } catch (error) {
-      // Revert the optimistic update on error
-      setStudents(prev => prev.map(student => ({
-        ...student,
-        points: Math.max(0, Math.min(20, student.points + 1))
-      })));
       alert('Failed to update all students. Please check your connection.');
-    } finally {
-      // Remove the operation from processing set
-      setProcessingOperations(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(operationKey);
-        return newSet;
-      });
     }
   };
 
-  // Random student selection - using socketRef
+  // Random student selection
   const selectRandomStudent = () => {
     if (students.length === 0 || !socketRef.current) {
       alert('No students available to select!');
@@ -540,7 +473,6 @@ const ClassroomTracker = () => {
       studentId: student.id
     });
     
-    // Auto-scroll to the selected student
     setTimeout(() => {
       const studentCard = document.querySelector(`[data-student-index="${randomIndex}"]`);
       if (studentCard) {
@@ -549,7 +481,7 @@ const ClassroomTracker = () => {
     }, 100);
   };
 
-  // Clear selection - using socketRef
+  // Clear selection
   const clearSelection = () => {
     if (!socketRef.current) return;
     
@@ -558,9 +490,9 @@ const ClassroomTracker = () => {
     });
   };
 
-  // Update student profile - with processing flag
+  // Update student profile
   const updateStudentProfile = async (studentIndex, updates) => {
-    if (!currentClass || !isConnected || !students[studentIndex]) return;
+    if (!currentClass || !isConnected || !students[studentIndex] || isProcessingRef.current) return;
     
     const student = students[studentIndex];
     try {
@@ -576,22 +508,19 @@ const ClassroomTracker = () => {
   // Upload custom profile picture
   const uploadProfilePic = async (studentIndex, event) => {
     const file = event.target.files[0];
-    if (!file || !currentClass || !isConnected) return;
+    if (!file || !currentClass || !isConnected || isProcessingRef.current) return;
     
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       alert('Please upload an image file');
       return;
     }
     
-    // Validate file size (max 2MB for network transfer)
     if (file.size > 2 * 1024 * 1024) {
       alert('Image must be smaller than 2MB');
       return;
     }
     
     try {
-      // Convert to base64
       const reader = new FileReader();
       reader.onload = async (e) => {
         const base64 = e.target.result;
@@ -608,13 +537,12 @@ const ClassroomTracker = () => {
       alert('Failed to process image. Please try a different photo.');
     }
     
-    // Reset the input
     event.target.value = '';
   };
 
   // Reset to default avatar
   const resetToDefaultAvatar = async (studentIndex) => {
-    if (!currentClass || !isConnected) return;
+    if (!currentClass || !isConnected || isProcessingRef.current) return;
     
     const student = students[studentIndex];
     await updateStudentProfile(studentIndex, {
@@ -652,10 +580,10 @@ const ClassroomTracker = () => {
     }
   };
 
-  // Import CSV - fixed with processing flag
+  // Import CSV
   const importCSV = async (event) => {
     const file = event.target.files[0];
-    if (!file || !currentClass || !isConnected) return;
+    if (!file || !currentClass || !isConnected || isProcessingRef.current) return;
     
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -668,7 +596,6 @@ const ClassroomTracker = () => {
       }
       
       try {
-        // Import students one by one to ensure proper server sync
         for (let i = 1; i < lines.length; i++) {
           const values = lines[i].split(',');
           const studentName = values[0]?.replace(/"/g, '').trim();
@@ -685,7 +612,6 @@ const ClassroomTracker = () => {
               })
             });
             
-            // Small delay to prevent overwhelming the server
             await new Promise(resolve => setTimeout(resolve, 100));
           }
         }
@@ -746,6 +672,24 @@ const ClassroomTracker = () => {
     return lights;
   };
 
+  // Get point color for presenter view
+  const getPointColor = (points) => {
+    if (points === 0) return 'text-gray-500';
+    if (points <= 5) return 'text-green-500';
+    if (points <= 10) return 'text-blue-500';
+    if (points <= 15) return 'text-purple-500';
+    return 'text-yellow-500';
+  };
+
+  // Get background color for presenter view
+  const getCardBgColor = (points) => {
+    if (points === 0) return 'bg-gray-50';
+    if (points <= 5) return 'bg-green-50';
+    if (points <= 10) return 'bg-blue-50';
+    if (points <= 15) return 'bg-purple-50';
+    return 'bg-yellow-50';
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto">
@@ -766,14 +710,30 @@ const ClassroomTracker = () => {
               </span>
             )}
           </div>
-          {!isConnected && (
+          <div className="flex items-center gap-2">
+            {/* Presenter View Toggle */}
             <button
-              onClick={() => connectToServer(serverUrl)}
-              className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-xs"
+              onClick={togglePresenterView}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
+                presenterView 
+                  ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+              title={presenterView ? 'Exit Presenter View' : 'Enter Presenter View'}
             >
-              Reconnect
+              {presenterView ? <Eye size={14} /> : <EyeOff size={14} />}
+              {presenterView ? 'Presenter View' : 'Normal View'}
             </button>
-          )}
+            
+            {!isConnected && (
+              <button
+                onClick={() => connectToServer(serverUrl)}
+                className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-xs"
+              >
+                Reconnect
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Connection Error Modal */}
@@ -821,157 +781,179 @@ const ClassroomTracker = () => {
           </div>
         )}
 
-        {/* Header - Collapsible */}
-        <div className={`bg-white rounded-lg shadow-md transition-all duration-300 ease-in-out ${controlsMinimized ? 'mb-3' : 'mb-6'}`}>
-          {/* Always Visible Header Bar */}
-          <div className="p-4 border-b border-gray-200">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <h1 className={`font-bold text-gray-800 flex items-center gap-2 transition-all duration-300 ${controlsMinimized ? 'text-xl' : 'text-3xl'}`}>
-                  <Users className="text-blue-600" />
-                  {controlsMinimized ? 'Tracker' : 'Classroom Participation Tracker'}
-                  {!isConnected && <span className="text-red-500 text-sm">(Offline)</span>}
-                </h1>
+        {/* Header - Hide in presenter view or show minimal version */}
+        {(!presenterView || !currentClass) && (
+          <div className={`bg-white rounded-lg shadow-md transition-all duration-300 ease-in-out ${controlsMinimized ? 'mb-3' : 'mb-6'}`}>
+            {/* Always Visible Header Bar */}
+            <div className="p-4 border-b border-gray-200">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <h1 className={`font-bold text-gray-800 flex items-center gap-2 transition-all duration-300 ${controlsMinimized ? 'text-xl' : 'text-3xl'}`}>
+                    <Users className="text-blue-600" />
+                    {controlsMinimized ? 'Tracker' : 'Classroom Participation Tracker'}
+                    {!isConnected && <span className="text-red-500 text-sm">(Offline)</span>}
+                  </h1>
+                  
+                  {/* Minimized Info Display */}
+                  {controlsMinimized && currentClass && (
+                    <div className="flex items-center gap-4 text-sm text-gray-600">
+                      <span className="font-medium text-blue-600">{currentClass}</span>
+                      <span className="flex items-center gap-1">
+                        <Calendar size={14} />
+                        {currentWeek}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Users size={14} />
+                        {students.length} students
+                      </span>
+                    </div>
+                  )}
+                </div>
                 
-                {/* Minimized Info Display */}
-                {controlsMinimized && currentClass && (
-                  <div className="flex items-center gap-4 text-sm text-gray-600">
-                    <span className="font-medium text-blue-600">{currentClass}</span>
-                    <span className="flex items-center gap-1">
-                      <Calendar size={14} />
-                      {currentWeek}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Users size={14} />
-                      {students.length} students
-                    </span>
+                {/* Toggle Button */}
+                <button
+                  onClick={toggleControls}
+                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex items-center gap-2 text-gray-600 hover:text-gray-800"
+                  title={controlsMinimized ? 'Show controls' : 'Hide controls'}
+                >
+                  <Settings size={16} />
+                  {controlsMinimized ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Collapsible Content */}
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${controlsMinimized ? 'max-h-0' : 'max-h-96'}`}>
+              <div className="p-6 pt-4">
+                {/* Class Management */}
+                <div className="flex flex-wrap gap-4 items-center mb-4">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="New class name"
+                      value={newClassName}
+                      onChange={(e) => setNewClassName(e.target.value)}
+                      className="px-3 py-2 border rounded-md"
+                      onKeyPress={(e) => e.key === 'Enter' && createClass()}
+                      disabled={!isConnected}
+                    />
+                    <button
+                      onClick={createClass}
+                      disabled={!isConnected || isProcessingRef.current}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300"
+                    >
+                      Create Class
+                    </button>
+                  </div>
+                  
+                  <select
+                    value={currentClass}
+                    onChange={(e) => setCurrentClass(e.target.value)}
+                    className="px-3 py-2 border rounded-md"
+                    disabled={!isConnected}
+                  >
+                    <option value="">Select a class...</option>
+                    {Object.keys(classes).map(className => (
+                      <option key={className} value={className}>{className}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Controls */}
+                {currentClass && (
+                  <div className="space-y-4">
+                    {/* Add Student Section */}
+                    <div className="flex flex-wrap gap-3 items-center p-3 bg-gray-50 rounded-lg">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Student name"
+                          value={newStudentName}
+                          onChange={(e) => setNewStudentName(e.target.value)}
+                          className="px-3 py-2 border rounded-md"
+                          onKeyPress={(e) => e.key === 'Enter' && addStudent()}
+                          disabled={!isConnected}
+                        />
+                        <button
+                          onClick={addStudent}
+                          disabled={!isConnected || isProcessingRef.current}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 flex items-center gap-2"
+                        >
+                          <UserPlus size={16} />
+                          Add Student
+                        </button>
+                      </div>
+                      
+                      <div className="text-sm text-gray-600">
+                        Students: {students.length}
+                      </div>
+                    </div>
+                    
+                    {/* Main Controls */}
+                    <div className="flex flex-wrap gap-3 items-center">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Calendar size={16} />
+                        Week: {currentWeek}
+                      </div>
+                      
+                      <label className="px-4 py-2 bg-green-600 text-white rounded-md cursor-pointer hover:bg-green-700 flex items-center gap-2">
+                        <Upload size={16} />
+                        Import CSV
+                        <input
+                          type="file"
+                          accept=".csv"
+                          onChange={importCSV}
+                          className="hidden"
+                          disabled={!isConnected || isProcessingRef.current}
+                        />
+                      </label>
+                      
+                      <button
+                        onClick={exportCSV}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center gap-2"
+                      >
+                        <Download size={16} />
+                        Export CSV
+                      </button>
+                      
+                      <button
+                        onClick={resetWeek}
+                        disabled={!isConnected || isProcessingRef.current}
+                        className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-300 flex items-center gap-2"
+                      >
+                        <RotateCcw size={16} />
+                        Reset Week
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
-              
-              {/* Toggle Button */}
+            </div>
+          </div>
+        )}
+
+        {/* Minimal header in presenter view */}
+        {presenterView && currentClass && (
+          <div className="bg-white rounded-lg shadow-md mb-3 p-3">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <h2 className="text-xl font-bold text-gray-800">{currentClass}</h2>
+                <span className="text-sm text-gray-600">{currentWeek}</span>
+                <span className="text-sm text-gray-600">{students.length} students</span>
+              </div>
               <button
-                onClick={toggleControls}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex items-center gap-2 text-gray-600 hover:text-gray-800"
-                title={controlsMinimized ? 'Show controls' : 'Hide controls'}
+                onClick={togglePresenterView}
+                className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-xs flex items-center gap-1"
               >
-                <Settings size={16} />
-                {controlsMinimized ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                <EyeOff size={14} />
+                Exit Presenter View
               </button>
             </div>
           </div>
+        )}
 
-          {/* Collapsible Content */}
-          <div className={`overflow-hidden transition-all duration-300 ease-in-out ${controlsMinimized ? 'max-h-0' : 'max-h-96'}`}>
-            <div className="p-6 pt-4">
-              {/* Class Management */}
-              <div className="flex flex-wrap gap-4 items-center mb-4">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="New class name"
-                    value={newClassName}
-                    onChange={(e) => setNewClassName(e.target.value)}
-                    className="px-3 py-2 border rounded-md"
-                    onKeyPress={(e) => e.key === 'Enter' && createClass()}
-                    disabled={!isConnected}
-                  />
-                  <button
-                    onClick={createClass}
-                    disabled={!isConnected}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300"
-                  >
-                    Create Class
-                  </button>
-                </div>
-                
-                <select
-                  value={currentClass}
-                  onChange={(e) => setCurrentClass(e.target.value)}
-                  className="px-3 py-2 border rounded-md"
-                  disabled={!isConnected}
-                >
-                  <option value="">Select a class...</option>
-                  {Object.keys(classes).map(className => (
-                    <option key={className} value={className}>{className}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Controls */}
-              {currentClass && (
-                <div className="space-y-4">
-                  {/* Add Student Section */}
-                  <div className="flex flex-wrap gap-3 items-center p-3 bg-gray-50 rounded-lg">
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Student name"
-                        value={newStudentName}
-                        onChange={(e) => setNewStudentName(e.target.value)}
-                        className="px-3 py-2 border rounded-md"
-                        onKeyPress={(e) => e.key === 'Enter' && addStudent()}
-                        disabled={!isConnected}
-                      />
-                      <button
-                        onClick={addStudent}
-                        disabled={!isConnected}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 flex items-center gap-2"
-                      >
-                        <UserPlus size={16} />
-                        Add Student
-                      </button>
-                    </div>
-                    
-                    <div className="text-sm text-gray-600">
-                      Students: {students.length}
-                    </div>
-                  </div>
-                  
-                  {/* Main Controls */}
-                  <div className="flex flex-wrap gap-3 items-center">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Calendar size={16} />
-                      Week: {currentWeek}
-                    </div>
-                    
-                    <label className="px-4 py-2 bg-green-600 text-white rounded-md cursor-pointer hover:bg-green-700 flex items-center gap-2">
-                      <Upload size={16} />
-                      Import CSV
-                      <input
-                        type="file"
-                        accept=".csv"
-                        onChange={importCSV}
-                        className="hidden"
-                        disabled={!isConnected}
-                      />
-                    </label>
-                    
-                    <button
-                      onClick={exportCSV}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center gap-2"
-                    >
-                      <Download size={16} />
-                      Export CSV
-                    </button>
-                    
-                    <button
-                      onClick={resetWeek}
-                      disabled={!isConnected}
-                      className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-300 flex items-center gap-2"
-                    >
-                      <RotateCcw size={16} />
-                      Reset Week
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Tools Section - Collapsible */}
-        {currentClass && (
+        {/* Tools Section - Hide in presenter view */}
+        {currentClass && !presenterView && (
           <div className={`bg-white rounded-lg shadow-md transition-all duration-300 ease-in-out ${toolsMinimized ? 'mb-3' : 'mb-6'}`}>
             {/* Tools Header Bar */}
             <div className="p-4 border-b border-gray-200">
@@ -1056,7 +1038,7 @@ const ClassroomTracker = () => {
                   
                   <button
                     onClick={addPointToAll}
-                    disabled={students.length === 0 || !isConnected}
+                    disabled={students.length === 0 || !isConnected || isProcessingRef.current}
                     className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 transition-colors duration-200"
                   >
                     <Plus size={16} />
@@ -1065,7 +1047,7 @@ const ClassroomTracker = () => {
                   
                   <button
                     onClick={subtractPointFromAll}
-                    disabled={students.length === 0 || !isConnected}
+                    disabled={students.length === 0 || !isConnected || isProcessingRef.current}
                     className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 transition-colors duration-200"
                   >
                     <Minus size={16} />
@@ -1081,117 +1063,166 @@ const ClassroomTracker = () => {
           </div>
         )}
 
-        {/* Students Grid */}
+        {/* Students Grid - Different layouts for presenter vs normal view */}
         {currentClass ? (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
-              {students.map((student, index) => (
-                <div 
-                  key={student.id} 
-                  data-student-index={index}
-                  className={`bg-white rounded-lg shadow-md p-6 text-center relative group transition-all duration-300 ${
-                    selectedStudentIndex === index 
-                      ? 'ring-4 ring-purple-400 ring-opacity-75 bg-purple-50 shadow-lg transform scale-105' 
-                      : 'hover:shadow-lg'
-                  }`}
-                >
-                  {/* Selection Indicator */}
-                  {selectedStudentIndex === index && (
-                    <div className="absolute -top-2 -right-2 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg animate-pulse">
-                      <Target size={16} />
-                    </div>
-                  )}
-                  
-                  {/* Delete Button */}
-                  <button
-                    onClick={() => setShowDeleteConfirm(index)}
-                    disabled={!isConnected}
-                    className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:bg-gray-300 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Delete student"
+            {presenterView ? (
+              // Presenter View - Compact grid
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2">
+                {students.map((student, index) => (
+                  <div 
+                    key={student.id} 
+                    data-student-index={index}
+                    className={`${getCardBgColor(student.points)} rounded-lg p-3 text-center relative transition-all duration-300 border-2 ${
+                      selectedStudentIndex === index 
+                        ? 'border-purple-500 shadow-lg transform scale-105 z-10' 
+                        : 'border-transparent'
+                    }`}
                   >
-                    <Trash2 size={12} />
-                  </button>
-                  
-                  {/* Profile Picture with Upload */}
-                  <div className="relative group mb-4">
-                    <img
-                      src={student.avatar}
-                      alt={student.name}
-                      className="w-24 h-24 rounded-full mx-auto bg-gray-100 object-cover shadow-md"
-                    />
-                    
-                    {/* Upload overlay - appears on hover */}
-                    {isConnected && (
-                      <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
-                        <Camera size={24} className="text-white" />
+                    {/* Selection Indicator for presenter view */}
+                    {selectedStudentIndex === index && (
+                      <div className="absolute -top-1 -right-1 w-5 h-5 bg-purple-600 text-white rounded-full flex items-center justify-center animate-pulse">
+                        <Target size={10} />
                       </div>
                     )}
                     
-                    {/* Hidden file input */}
-                    {isConnected && (
-                      <input
-                        ref={el => fileInputRefs.current[student.id] = el}
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => uploadProfilePic(index, e)}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        disabled={false}
-                      />
-                    )}
+                    {/* Student Name */}
+                    <div className="font-semibold text-gray-800 text-sm mb-1 truncate px-1" title={student.name}>
+                      {student.name}
+                    </div>
                     
-                    {/* Reset button for custom avatars */}
-                    {student.hasCustomAvatar && isConnected && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          resetToDefaultAvatar(index);
-                        }}
-                        className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center"
-                        title="Reset to default avatar"
-                        disabled={false}
-                      >
-                        ×
-                      </button>
-                    )}
+                    {/* Large Points Display */}
+                    <div className={`text-2xl font-bold ${getPointColor(student.points)}`}>
+                      {student.points}
+                    </div>
                     
-                    {/* Small Points Display - positioned over avatar */}
-                    <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-white border-2 border-gray-200 rounded-full px-2 py-1 shadow-sm">
-                      <span className="text-xs font-medium text-gray-600">
-                        {student.points}/20
-                      </span>
+                    {/* Mini progress bar */}
+                    <div className="w-full bg-gray-200 rounded-full h-1 mt-2">
+                      <div 
+                        className={`h-1 rounded-full transition-all duration-300 ${
+                          student.points === 0 ? 'bg-gray-400' :
+                          student.points <= 5 ? 'bg-green-400' :
+                          student.points <= 10 ? 'bg-blue-400' :
+                          student.points <= 15 ? 'bg-purple-400' :
+                          'bg-yellow-400'
+                        }`}
+                        style={{ width: `${(student.points / 20) * 100}%` }}
+                      ></div>
                     </div>
                   </div>
-                  
-                  <h3 className="font-bold text-gray-800 mb-3 text-lg leading-tight px-1 min-h-[3rem] flex items-center justify-center">
-                    <span className="text-center">{student.name}</span>
-                  </h3>
-                  
-                  {/* Participation Lights */}
-                  <div className="flex justify-center gap-1 mb-4">
-                    {renderLights(student.points)}
-                  </div>
-                  
-                  {/* Control Buttons */}
-                  <div className="flex gap-2 justify-center mt-2">
+                ))}
+              </div>
+            ) : (
+              // Normal View - Original layout
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+                {students.map((student, index) => (
+                  <div 
+                    key={student.id} 
+                    data-student-index={index}
+                    className={`bg-white rounded-lg shadow-md p-6 text-center relative group transition-all duration-300 ${
+                      selectedStudentIndex === index 
+                        ? 'ring-4 ring-purple-400 ring-opacity-75 bg-purple-50 shadow-lg transform scale-105' 
+                        : 'hover:shadow-lg'
+                    }`}
+                  >
+                    {/* Selection Indicator */}
+                    {selectedStudentIndex === index && (
+                      <div className="absolute -top-2 -right-2 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg animate-pulse">
+                        <Target size={16} />
+                      </div>
+                    )}
+                    
+                    {/* Delete Button */}
                     <button
-                      onClick={() => updatePoints(index, -1)}
-                      disabled={student.points === 0 || !isConnected}
-                      className="w-10 h-10 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:bg-gray-300 flex items-center justify-center transition-colors duration-200"
+                      onClick={() => setShowDeleteConfirm(index)}
+                      disabled={!isConnected}
+                      className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:bg-gray-300 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Delete student"
                     >
-                      <Minus size={16} />
+                      <Trash2 size={12} />
                     </button>
                     
-                    <button
-                      onClick={() => updatePoints(index, 1)}
-                      disabled={student.points === 20 || !isConnected}
-                      className="w-10 h-10 bg-green-500 text-white rounded-full hover:bg-green-600 disabled:bg-gray-300 flex items-center justify-center transition-colors duration-200"
-                    >
-                      <Plus size={16} />
-                    </button>
+                    {/* Profile Picture with Upload */}
+                    <div className="relative group mb-4">
+                      <img
+                        src={student.avatar}
+                        alt={student.name}
+                        className="w-24 h-24 rounded-full mx-auto bg-gray-100 object-cover shadow-md"
+                      />
+                      
+                      {/* Upload overlay */}
+                      {isConnected && (
+                        <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                          <Camera size={24} className="text-white" />
+                        </div>
+                      )}
+                      
+                      {/* Hidden file input */}
+                      {isConnected && (
+                        <input
+                          ref={el => fileInputRefs.current[student.id] = el}
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => uploadProfilePic(index, e)}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          disabled={isProcessingRef.current}
+                        />
+                      )}
+                      
+                      {/* Reset button for custom avatars */}
+                      {student.hasCustomAvatar && isConnected && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            resetToDefaultAvatar(index);
+                          }}
+                          className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center"
+                          title="Reset to default avatar"
+                          disabled={isProcessingRef.current}
+                        >
+                          ×
+                        </button>
+                      )}
+                      
+                      {/* Points Display */}
+                      <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-white border-2 border-gray-200 rounded-full px-2 py-1 shadow-sm">
+                        <span className="text-xs font-medium text-gray-600">
+                          {student.points}/20
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <h3 className="font-bold text-gray-800 mb-3 text-lg leading-tight px-1 min-h-[3rem] flex items-center justify-center">
+                      <span className="text-center">{student.name}</span>
+                    </h3>
+                    
+                    {/* Participation Lights */}
+                    <div className="flex justify-center gap-1 mb-4">
+                      {renderLights(student.points)}
+                    </div>
+                    
+                    {/* Control Buttons */}
+                    <div className="flex gap-2 justify-center mt-2">
+                      <button
+                        onClick={() => updatePoints(index, -1)}
+                        disabled={student.points === 0 || !isConnected || isProcessingRef.current}
+                        className="w-10 h-10 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:bg-gray-300 flex items-center justify-center transition-colors duration-200"
+                      >
+                        <Minus size={16} />
+                      </button>
+                      
+                      <button
+                        onClick={() => updatePoints(index, 1)}
+                        disabled={student.points === 20 || !isConnected || isProcessingRef.current}
+                        className="w-10 h-10 bg-green-500 text-white rounded-full hover:bg-green-600 disabled:bg-gray-300 flex items-center justify-center transition-colors duration-200"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
 
             {/* Delete Confirmation Modal */}
             {showDeleteConfirm !== null && (
@@ -1224,7 +1255,7 @@ const ClassroomTracker = () => {
                     </button>
                     <button
                       onClick={confirmDeleteStudent}
-                      disabled={!isConnected}
+                      disabled={!isConnected || isProcessingRef.current}
                       className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-300 flex items-center gap-2"
                     >
                       <Trash2 size={16} />
