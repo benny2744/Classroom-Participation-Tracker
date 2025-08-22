@@ -6,9 +6,9 @@
         "name": "asdf",
         "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=asdf",
         "hasCustomAvatar": false,
-        "points": 2,
+        "points": 11,
         "createdAt": "2025-08-19T01:04:35.420Z",
-        "lastUpdated": "2025-08-22T01:29:50.299Z"
+        "lastUpdated": "2025-08-22T03:05:11.322Z"
       },
       {
         "id": 1755565495672,
@@ -17,7 +17,7 @@
         "hasCustomAvatar": false,
         "points": 0,
         "createdAt": "2025-08-19T01:04:55.672Z",
-        "lastUpdated": "2025-08-22T01:29:50.300Z"
+        "lastUpdated": "2025-08-22T03:05:11.322Z"
       },
       {
         "id": 1755566565375,
@@ -26,7 +26,7 @@
         "hasCustomAvatar": false,
         "points": 0,
         "createdAt": "2025-08-19T01:22:45.375Z",
-        "lastUpdated": "2025-08-22T01:29:50.300Z"
+        "lastUpdated": "2025-08-22T03:05:11.322Z"
       },
       {
         "id": 1755566567629,
@@ -35,7 +35,7 @@
         "hasCustomAvatar": false,
         "points": 0,
         "createdAt": "2025-08-19T01:22:47.629Z",
-        "lastUpdated": "2025-08-22T01:29:50.300Z"
+        "lastUpdated": "2025-08-22T03:05:11.322Z"
       },
       {
         "id": 1755566569539,
@@ -44,7 +44,7 @@
         "hasCustomAvatar": false,
         "points": 0,
         "createdAt": "2025-08-19T01:22:49.539Z",
-        "lastUpdated": "2025-08-22T01:29:50.300Z"
+        "lastUpdated": "2025-08-22T03:05:11.322Z"
       },
       {
         "id": 1755566571760,
@@ -53,7 +53,7 @@
         "hasCustomAvatar": false,
         "points": 0,
         "createdAt": "2025-08-19T01:22:51.760Z",
-        "lastUpdated": "2025-08-22T01:29:50.300Z"
+        "lastUpdated": "2025-08-22T03:05:11.322Z"
       },
       {
         "id": 1755566574081,
@@ -62,7 +62,7 @@
         "hasCustomAvatar": false,
         "points": 0,
         "createdAt": "2025-08-19T01:22:54.081Z",
-        "lastUpdated": "2025-08-22T01:29:50.300Z"
+        "lastUpdated": "2025-08-22T03:05:11.322Z"
       },
       {
         "id": 1755584806495,
@@ -71,7 +71,7 @@
         "hasCustomAvatar": false,
         "points": 0,
         "createdAt": "2025-08-19T06:26:46.495Z",
-        "lastUpdated": "2025-08-22T01:29:50.300Z"
+        "lastUpdated": "2025-08-22T03:05:11.322Z"
       }
     ],
     "lastWeek": "2025-W34",
