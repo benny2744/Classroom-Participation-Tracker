@@ -67,6 +67,14 @@ npm run production
 - Connection status indicators
 - Real-time device count display
 
+## 🆕 Recent Updates
+
+- **Network Synchronization**: Full real-time multi-device support with WebSocket connections
+- **Improved Performance**: Fixed button responsiveness and optimized data handling
+- **Enhanced UI**: Better visual feedback and connection status indicators
+- **Modernized Codebase**: Updated to latest React patterns and dependencies
+- **Docker Support**: Added containerization for easy deployment
+
 ## 🌐 Network Access & Multi-Device Setup
 
 Once started, the app is available at:
@@ -111,10 +119,11 @@ Mike Johnson
 
 ## 🛠 Technology Stack
 
-- **Frontend**: React 18, Tailwind CSS, Lucide Icons
+- **Frontend**: React 18, CSS3, Lucide Icons
 - **Backend**: Node.js, Express, Socket.io
-- **Real-time**: WebSocket connections
+- **Real-time**: WebSocket connections for instant sync
 - **Storage**: File-based persistence with auto-save
+- **Development**: Concurrently for running both frontend and backend
 
 ## 🐳 Docker Alternative
 
@@ -126,14 +135,6 @@ docker-compose up -d
 
 # Access at http://localhost:3000
 ```
-
-## 🛠 Technology Stack
-
-- **Frontend**: React 18, CSS3, Lucide Icons
-- **Backend**: Node.js, Express, Socket.io
-- **Real-time**: WebSocket connections for instant sync
-- **Storage**: File-based persistence with auto-save
-- **Development**: Concurrently for running both frontend and backend
 
 ## 🆘 Troubleshooting
 
