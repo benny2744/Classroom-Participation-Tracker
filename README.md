@@ -63,12 +63,14 @@ npm run production
 
 ### 🎨 **Modern Interface**
 - Mobile-friendly responsive design
+- **Presentation Mode**: Optimized grid layout for classroom projectors and large displays
 - Collapsible sections for clean UI
 - Connection status indicators
 - Real-time device count display
 
 ## 🆕 Recent Updates
 
+- **Presentation Mode**: Added toggle for optimized classroom display with compact student cards
 - **Network Synchronization**: Full real-time multi-device support with WebSocket connections
 - **Improved Performance**: Fixed button responsiveness and optimized data handling
 - **Enhanced UI**: Better visual feedback and connection status indicators
@@ -98,8 +100,31 @@ Once started, the app is available at:
 3. **Track Participation**: Click +/- buttons on student cards
 4. **Use Tools**:
    - Random student selection
+   - **Presentation Mode**: Toggle for classroom display optimization
    - Class-wide point adjustments
    - Export weekly reports
+
+### 📺 Presentation Mode
+
+The **Presentation Mode** feature is specifically designed for classroom environments with projectors, smart boards, or large displays:
+
+**Features:**
+- **Compact Grid Layout**: Displays up to 12 students per row on large screens
+- **Optimized Spacing**: Reduced padding for maximum screen utilization
+- **Enhanced Visibility**: Responsive design that scales from phones to projectors
+- **Real-time Updates**: All participation changes appear instantly on the display
+
+**How to Use:**
+1. Click the "Presentation Mode" toggle in the class tools section
+2. Connect your display device (projector, smart board, etc.)
+3. The layout automatically optimizes for your screen size
+4. Use other devices for input while the main display shows real-time updates
+
+**Perfect for:**
+- Classroom projectors and smart boards
+- Parent-teacher conferences
+- Student engagement displays
+- Real-time participation monitoring during lessons
 
 ## 🌈 Point System & Colors
 
