@@ -1112,9 +1112,9 @@ const ClassroomTracker = () => {
         {/* Students Grid */}
         {currentClass ? (
           <>
-            <div className={`grid gap-4 ${
+            <div className={`grid gap-2 ${
               presentationMode 
-                ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10' 
+                ? 'grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12' 
                 : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
             }`}>
               {students.map((student, index) => (
@@ -1123,7 +1123,7 @@ const ClassroomTracker = () => {
                   <div 
                     key={student.id} 
                     data-student-index={index}
-                    className={`bg-white rounded-lg shadow-md p-3 text-center relative transition-all duration-300 border-4 ${
+                    className={`bg-white rounded-lg shadow-md p-2 sm:p-3 text-center relative transition-all duration-300 border-4 ${
                       getBorderColor(student.points)
                     } ${
                       selectedStudentIndex === index 
@@ -1139,13 +1139,13 @@ const ClassroomTracker = () => {
                     )}
                     
                     {/* Student Name */}
-                    <h3 className="font-bold text-gray-800 mb-2 text-sm leading-tight">
+                    <h3 className="font-bold text-gray-800 mb-1 sm:mb-2 text-xs sm:text-sm leading-tight">
                       <span className="text-center">{student.name}</span>
                     </h3>
                     
                     {/* Points Display - Large and Prominent */}
-                    <div className="bg-gray-50 rounded-lg p-2 mb-2">
-                      <div className="text-xl font-bold text-gray-800">
+                    <div className="bg-gray-50 rounded-lg p-1 sm:p-2 mb-1 sm:mb-2">
+                      <div className="text-lg sm:text-xl font-bold text-gray-800">
                         {student.points}
                       </div>
                       <div className="text-xs text-gray-500">
@@ -1158,17 +1158,19 @@ const ClassroomTracker = () => {
                       <button
                         onClick={() => updatePoints(index, -1)}
                         disabled={student.points === 0 || !isConnected}
-                        className="w-6 h-6 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:bg-gray-300 flex items-center justify-center transition-colors duration-200"
+                        className="w-5 h-5 sm:w-6 sm:h-6 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:bg-gray-300 flex items-center justify-center transition-colors duration-200"
                       >
-                        <Minus size={10} />
+                        <Minus size={8} className="sm:hidden" />
+                        <Minus size={10} className="hidden sm:block" />
                       </button>
                       
                       <button
                         onClick={() => updatePoints(index, 1)}
                         disabled={student.points === 20 || !isConnected}
-                        className="w-6 h-6 bg-green-500 text-white rounded-full hover:bg-green-600 disabled:bg-gray-300 flex items-center justify-center transition-colors duration-200"
+                        className="w-5 h-5 sm:w-6 sm:h-6 bg-green-500 text-white rounded-full hover:bg-green-600 disabled:bg-gray-300 flex items-center justify-center transition-colors duration-200"
                       >
-                        <Plus size={10} />
+                        <Plus size={8} className="sm:hidden" />
+                        <Plus size={10} className="hidden sm:block" />
                       </button>
                     </div>
                   </div>
