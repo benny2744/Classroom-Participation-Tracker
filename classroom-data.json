@@ -6,9 +6,9 @@
         "name": "asdf",
         "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=asdf",
         "hasCustomAvatar": false,
-        "points": 11,
+        "points": 3,
         "createdAt": "2025-08-19T01:04:35.420Z",
-        "lastUpdated": "2025-08-22T03:05:11.322Z"
+        "lastUpdated": "2025-08-22T03:41:20.326Z"
       },
       {
         "id": 1755565495672,
@@ -17,7 +17,7 @@
         "hasCustomAvatar": false,
         "points": 0,
         "createdAt": "2025-08-19T01:04:55.672Z",
-        "lastUpdated": "2025-08-22T03:05:11.322Z"
+        "lastUpdated": "2025-08-22T03:34:33.167Z"
       },
       {
         "id": 1755566565375,
@@ -26,7 +26,7 @@
         "hasCustomAvatar": false,
         "points": 0,
         "createdAt": "2025-08-19T01:22:45.375Z",
-        "lastUpdated": "2025-08-22T03:05:11.322Z"
+        "lastUpdated": "2025-08-22T03:34:33.167Z"
       },
       {
         "id": 1755566567629,
@@ -35,7 +35,7 @@
         "hasCustomAvatar": false,
         "points": 0,
         "createdAt": "2025-08-19T01:22:47.629Z",
-        "lastUpdated": "2025-08-22T03:05:11.322Z"
+        "lastUpdated": "2025-08-22T03:34:33.167Z"
       },
       {
         "id": 1755566569539,
@@ -44,7 +44,7 @@
         "hasCustomAvatar": false,
         "points": 0,
         "createdAt": "2025-08-19T01:22:49.539Z",
-        "lastUpdated": "2025-08-22T03:05:11.322Z"
+        "lastUpdated": "2025-08-22T03:34:33.167Z"
       },
       {
         "id": 1755566571760,
@@ -53,7 +53,7 @@
         "hasCustomAvatar": false,
         "points": 0,
         "createdAt": "2025-08-19T01:22:51.760Z",
-        "lastUpdated": "2025-08-22T03:05:11.322Z"
+        "lastUpdated": "2025-08-22T03:34:33.167Z"
       },
       {
         "id": 1755566574081,
@@ -62,7 +62,7 @@
         "hasCustomAvatar": false,
         "points": 0,
         "createdAt": "2025-08-19T01:22:54.081Z",
-        "lastUpdated": "2025-08-22T03:05:11.322Z"
+        "lastUpdated": "2025-08-22T03:34:33.167Z"
       },
       {
         "id": 1755584806495,
@@ -71,7 +71,79 @@
         "hasCustomAvatar": false,
         "points": 0,
         "createdAt": "2025-08-19T06:26:46.495Z",
-        "lastUpdated": "2025-08-22T03:05:11.322Z"
+        "lastUpdated": "2025-08-22T03:34:33.167Z"
+      },
+      {
+        "id": 1755833643345,
+        "name": "aaaddd",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=aaaddd",
+        "hasCustomAvatar": false,
+        "points": 0,
+        "createdAt": "2025-08-22T03:34:03.345Z",
+        "lastUpdated": "2025-08-22T03:34:33.167Z"
+      },
+      {
+        "id": 1755833644736,
+        "name": "fasdfas",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=fasdfas",
+        "hasCustomAvatar": false,
+        "points": 0,
+        "createdAt": "2025-08-22T03:34:04.736Z",
+        "lastUpdated": "2025-08-22T03:34:33.167Z"
+      },
+      {
+        "id": 1755833645916,
+        "name": "asdfasdf",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=asdfasdf",
+        "hasCustomAvatar": false,
+        "points": 0,
+        "createdAt": "2025-08-22T03:34:05.916Z",
+        "lastUpdated": "2025-08-22T03:34:33.167Z"
+      },
+      {
+        "id": 1755833646882,
+        "name": "sadf",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=sadf",
+        "hasCustomAvatar": false,
+        "points": 0,
+        "createdAt": "2025-08-22T03:34:06.882Z",
+        "lastUpdated": "2025-08-22T03:34:33.167Z"
+      },
+      {
+        "id": 1755833648002,
+        "name": "fds",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=fds",
+        "hasCustomAvatar": false,
+        "points": 0,
+        "createdAt": "2025-08-22T03:34:08.003Z",
+        "lastUpdated": "2025-08-22T03:34:33.167Z"
+      },
+      {
+        "id": 1755833649556,
+        "name": "asdgasdgasdg",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=asdgasdgasdg",
+        "hasCustomAvatar": false,
+        "points": 0,
+        "createdAt": "2025-08-22T03:34:09.556Z",
+        "lastUpdated": "2025-08-22T03:34:33.167Z"
+      },
+      {
+        "id": 1755833650724,
+        "name": "asdasdga",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=asdasdga",
+        "hasCustomAvatar": false,
+        "points": 0,
+        "createdAt": "2025-08-22T03:34:10.724Z",
+        "lastUpdated": "2025-08-22T03:34:33.167Z"
+      },
+      {
+        "id": 1755833651877,
+        "name": "asdgasdg",
+        "avatar": "https://api.dicebear.com/7.x/avataaars/svg?seed=asdgasdg",
+        "hasCustomAvatar": false,
+        "points": 0,
+        "createdAt": "2025-08-22T03:34:11.877Z",
+        "lastUpdated": "2025-08-22T03:34:33.167Z"
       }
     ],
     "lastWeek": "2025-W34",

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Plus, Minus, Download, Upload, RotateCcw, Users, Calendar, Camera, UserPlus, Trash2, X, ChevronUp, ChevronDown, Settings, Shuffle, Target, Wifi, WifiOff, Server } from 'lucide-react';
+import { Plus, Minus, Download, Upload, RotateCcw, Users, Calendar, Camera, UserPlus, Trash2, X, ChevronUp, ChevronDown, Settings, Shuffle, Target, Wifi, WifiOff, Server, Presentation } from 'lucide-react';
 import io from 'socket.io-client';
 
 const ClassroomTracker = () => {
@@ -13,6 +13,7 @@ const ClassroomTracker = () => {
   const [controlsMinimized, setControlsMinimized] = useState(false);
   const [toolsMinimized, setToolsMinimized] = useState(false);
   const [selectedStudentIndex, setSelectedStudentIndex] = useState(null);
+  const [presentationMode, setPresentationMode] = useState(false);
   
   // Network-related state
   const [socket, setSocket] = useState(null);
@@ -746,6 +747,15 @@ const ClassroomTracker = () => {
     return lights;
   };
 
+  // Get border color based on point ranges
+  const getBorderColor = (points) => {
+    if (points === 0) return 'border-gray-300';
+    if (points <= 5) return 'border-green-500';
+    if (points <= 10) return 'border-blue-500';
+    if (points <= 15) return 'border-purple-500';
+    return 'border-yellow-500';
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto">
@@ -766,14 +776,30 @@ const ClassroomTracker = () => {
               </span>
             )}
           </div>
-          {!isConnected && (
-            <button
-              onClick={() => connectToServer(serverUrl)}
-              className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-xs"
-            >
-              Reconnect
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Presentation Mode Toggle */}
+            {currentClass && (
+              <button
+                onClick={() => setPresentationMode(!presentationMode)}
+                className={`px-3 py-1 rounded-md flex items-center gap-2 transition-colors duration-200 text-xs ${
+                  presentationMode 
+                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                <Presentation size={14} />
+                {presentationMode ? 'Exit Presentation' : 'Presentation Mode'}
+              </button>
+            )}
+            {!isConnected && (
+              <button
+                onClick={() => connectToServer(serverUrl)}
+                className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-xs"
+              >
+                Reconnect
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Connection Error Modal */}
@@ -821,157 +847,159 @@ const ClassroomTracker = () => {
           </div>
         )}
 
-        {/* Header - Collapsible */}
-        <div className={`bg-white rounded-lg shadow-md transition-all duration-300 ease-in-out ${controlsMinimized ? 'mb-3' : 'mb-6'}`}>
-          {/* Always Visible Header Bar */}
-          <div className="p-4 border-b border-gray-200">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <h1 className={`font-bold text-gray-800 flex items-center gap-2 transition-all duration-300 ${controlsMinimized ? 'text-xl' : 'text-3xl'}`}>
-                  <Users className="text-blue-600" />
-                  {controlsMinimized ? 'Tracker' : 'Classroom Participation Tracker'}
-                  {!isConnected && <span className="text-red-500 text-sm">(Offline)</span>}
-                </h1>
+        {/* Header - Collapsible - Hidden in Presentation Mode */}
+        {!presentationMode && (
+          <div className={`bg-white rounded-lg shadow-md transition-all duration-300 ease-in-out ${controlsMinimized ? 'mb-3' : 'mb-6'}`}>
+            {/* Always Visible Header Bar */}
+            <div className="p-4 border-b border-gray-200">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <h1 className={`font-bold text-gray-800 flex items-center gap-2 transition-all duration-300 ${controlsMinimized ? 'text-xl' : 'text-3xl'}`}>
+                    <Users className="text-blue-600" />
+                    {controlsMinimized ? 'Tracker' : 'Classroom Participation Tracker'}
+                    {!isConnected && <span className="text-red-500 text-sm">(Offline)</span>}
+                  </h1>
+                  
+                  {/* Minimized Info Display */}
+                  {controlsMinimized && currentClass && (
+                    <div className="flex items-center gap-4 text-sm text-gray-600">
+                      <span className="font-medium text-blue-600">{currentClass}</span>
+                      <span className="flex items-center gap-1">
+                        <Calendar size={14} />
+                        {currentWeek}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Users size={14} />
+                        {students.length} students
+                      </span>
+                    </div>
+                  )}
+                </div>
                 
-                {/* Minimized Info Display */}
-                {controlsMinimized && currentClass && (
-                  <div className="flex items-center gap-4 text-sm text-gray-600">
-                    <span className="font-medium text-blue-600">{currentClass}</span>
-                    <span className="flex items-center gap-1">
-                      <Calendar size={14} />
-                      {currentWeek}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Users size={14} />
-                      {students.length} students
-                    </span>
+                {/* Toggle Button */}
+                <button
+                  onClick={toggleControls}
+                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex items-center gap-2 text-gray-600 hover:text-gray-800"
+                  title={controlsMinimized ? 'Show controls' : 'Hide controls'}
+                >
+                  <Settings size={16} />
+                  {controlsMinimized ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Collapsible Content */}
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${controlsMinimized ? 'max-h-0' : 'max-h-96'}`}>
+              <div className="p-6 pt-4">
+                {/* Class Management */}
+                <div className="flex flex-wrap gap-4 items-center mb-4">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="New class name"
+                      value={newClassName}
+                      onChange={(e) => setNewClassName(e.target.value)}
+                      className="px-3 py-2 border rounded-md"
+                      onKeyPress={(e) => e.key === 'Enter' && createClass()}
+                      disabled={!isConnected}
+                    />
+                    <button
+                      onClick={createClass}
+                      disabled={!isConnected}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300"
+                    >
+                      Create Class
+                    </button>
+                  </div>
+                  
+                  <select
+                    value={currentClass}
+                    onChange={(e) => setCurrentClass(e.target.value)}
+                    className="px-3 py-2 border rounded-md"
+                    disabled={!isConnected}
+                  >
+                    <option value="">Select a class...</option>
+                    {Object.keys(classes).map(className => (
+                      <option key={className} value={className}>{className}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Controls */}
+                {currentClass && (
+                  <div className="space-y-4">
+                    {/* Add Student Section */}
+                    <div className="flex flex-wrap gap-3 items-center p-3 bg-gray-50 rounded-lg">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Student name"
+                          value={newStudentName}
+                          onChange={(e) => setNewStudentName(e.target.value)}
+                          className="px-3 py-2 border rounded-md"
+                          onKeyPress={(e) => e.key === 'Enter' && addStudent()}
+                          disabled={!isConnected}
+                        />
+                        <button
+                          onClick={addStudent}
+                          disabled={!isConnected}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 flex items-center gap-2"
+                        >
+                          <UserPlus size={16} />
+                          Add Student
+                        </button>
+                      </div>
+                      
+                      <div className="text-sm text-gray-600">
+                        Students: {students.length}
+                      </div>
+                    </div>
+                    
+                    {/* Main Controls */}
+                    <div className="flex flex-wrap gap-3 items-center">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Calendar size={16} />
+                        Week: {currentWeek}
+                      </div>
+                      
+                      <label className="px-4 py-2 bg-green-600 text-white rounded-md cursor-pointer hover:bg-green-700 flex items-center gap-2">
+                        <Upload size={16} />
+                        Import CSV
+                        <input
+                          type="file"
+                          accept=".csv"
+                          onChange={importCSV}
+                          className="hidden"
+                          disabled={!isConnected}
+                        />
+                      </label>
+                      
+                      <button
+                        onClick={exportCSV}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center gap-2"
+                      >
+                        <Download size={16} />
+                        Export CSV
+                      </button>
+                      
+                      <button
+                        onClick={resetWeek}
+                        disabled={!isConnected}
+                        className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-300 flex items-center gap-2"
+                      >
+                        <RotateCcw size={16} />
+                        Reset Week
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
-              
-              {/* Toggle Button */}
-              <button
-                onClick={toggleControls}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors duration-200 flex items-center gap-2 text-gray-600 hover:text-gray-800"
-                title={controlsMinimized ? 'Show controls' : 'Hide controls'}
-              >
-                <Settings size={16} />
-                {controlsMinimized ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-              </button>
             </div>
           </div>
+        )}
 
-          {/* Collapsible Content */}
-          <div className={`overflow-hidden transition-all duration-300 ease-in-out ${controlsMinimized ? 'max-h-0' : 'max-h-96'}`}>
-            <div className="p-6 pt-4">
-              {/* Class Management */}
-              <div className="flex flex-wrap gap-4 items-center mb-4">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="New class name"
-                    value={newClassName}
-                    onChange={(e) => setNewClassName(e.target.value)}
-                    className="px-3 py-2 border rounded-md"
-                    onKeyPress={(e) => e.key === 'Enter' && createClass()}
-                    disabled={!isConnected}
-                  />
-                  <button
-                    onClick={createClass}
-                    disabled={!isConnected}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300"
-                  >
-                    Create Class
-                  </button>
-                </div>
-                
-                <select
-                  value={currentClass}
-                  onChange={(e) => setCurrentClass(e.target.value)}
-                  className="px-3 py-2 border rounded-md"
-                  disabled={!isConnected}
-                >
-                  <option value="">Select a class...</option>
-                  {Object.keys(classes).map(className => (
-                    <option key={className} value={className}>{className}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Controls */}
-              {currentClass && (
-                <div className="space-y-4">
-                  {/* Add Student Section */}
-                  <div className="flex flex-wrap gap-3 items-center p-3 bg-gray-50 rounded-lg">
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Student name"
-                        value={newStudentName}
-                        onChange={(e) => setNewStudentName(e.target.value)}
-                        className="px-3 py-2 border rounded-md"
-                        onKeyPress={(e) => e.key === 'Enter' && addStudent()}
-                        disabled={!isConnected}
-                      />
-                      <button
-                        onClick={addStudent}
-                        disabled={!isConnected}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 flex items-center gap-2"
-                      >
-                        <UserPlus size={16} />
-                        Add Student
-                      </button>
-                    </div>
-                    
-                    <div className="text-sm text-gray-600">
-                      Students: {students.length}
-                    </div>
-                  </div>
-                  
-                  {/* Main Controls */}
-                  <div className="flex flex-wrap gap-3 items-center">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Calendar size={16} />
-                      Week: {currentWeek}
-                    </div>
-                    
-                    <label className="px-4 py-2 bg-green-600 text-white rounded-md cursor-pointer hover:bg-green-700 flex items-center gap-2">
-                      <Upload size={16} />
-                      Import CSV
-                      <input
-                        type="file"
-                        accept=".csv"
-                        onChange={importCSV}
-                        className="hidden"
-                        disabled={!isConnected}
-                      />
-                    </label>
-                    
-                    <button
-                      onClick={exportCSV}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center gap-2"
-                    >
-                      <Download size={16} />
-                      Export CSV
-                    </button>
-                    
-                    <button
-                      onClick={resetWeek}
-                      disabled={!isConnected}
-                      className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-300 flex items-center gap-2"
-                    >
-                      <RotateCcw size={16} />
-                      Reset Week
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Tools Section - Collapsible */}
-        {currentClass && (
+        {/* Tools Section - Collapsible - Hidden in Presentation Mode */}
+        {currentClass && !presentationMode && (
           <div className={`bg-white rounded-lg shadow-md transition-all duration-300 ease-in-out ${toolsMinimized ? 'mb-3' : 'mb-6'}`}>
             {/* Tools Header Bar */}
             <div className="p-4 border-b border-gray-200">
@@ -1084,112 +1112,173 @@ const ClassroomTracker = () => {
         {/* Students Grid */}
         {currentClass ? (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+            <div className={`grid gap-4 ${
+              presentationMode 
+                ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10' 
+                : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
+            }`}>
               {students.map((student, index) => (
-                <div 
-                  key={student.id} 
-                  data-student-index={index}
-                  className={`bg-white rounded-lg shadow-md p-6 text-center relative group transition-all duration-300 ${
-                    selectedStudentIndex === index 
-                      ? 'ring-4 ring-purple-400 ring-opacity-75 bg-purple-50 shadow-lg transform scale-105' 
-                      : 'hover:shadow-lg'
-                  }`}
-                >
-                  {/* Selection Indicator */}
-                  {selectedStudentIndex === index && (
-                    <div className="absolute -top-2 -right-2 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg animate-pulse">
-                      <Target size={16} />
-                    </div>
-                  )}
-                  
-                  {/* Delete Button */}
-                  <button
-                    onClick={() => setShowDeleteConfirm(index)}
-                    disabled={!isConnected}
-                    className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:bg-gray-300 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Delete student"
+                presentationMode ? (
+                  /* Presentation Mode - Compact Cards */
+                  <div 
+                    key={student.id} 
+                    data-student-index={index}
+                    className={`bg-white rounded-lg shadow-md p-3 text-center relative transition-all duration-300 border-4 ${
+                      getBorderColor(student.points)
+                    } ${
+                      selectedStudentIndex === index 
+                        ? 'ring-4 ring-purple-400 ring-opacity-75 bg-purple-50 shadow-lg transform scale-105' 
+                        : 'hover:shadow-lg'
+                    }`}
                   >
-                    <Trash2 size={12} />
-                  </button>
-                  
-                  {/* Profile Picture with Upload */}
-                  <div className="relative group mb-4">
-                    <img
-                      src={student.avatar}
-                      alt={student.name}
-                      className="w-24 h-24 rounded-full mx-auto bg-gray-100 object-cover shadow-md"
-                    />
-                    
-                    {/* Upload overlay - appears on hover */}
-                    {isConnected && (
-                      <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
-                        <Camera size={24} className="text-white" />
+                    {/* Selection Indicator */}
+                    {selectedStudentIndex === index && (
+                      <div className="absolute -top-2 -right-2 w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center text-xs font-bold shadow-lg animate-pulse">
+                        <Target size={12} />
                       </div>
                     )}
                     
-                    {/* Hidden file input */}
-                    {isConnected && (
-                      <input
-                        ref={el => fileInputRefs.current[student.id] = el}
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => uploadProfilePic(index, e)}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        disabled={false}
-                      />
-                    )}
+                    {/* Student Name */}
+                    <h3 className="font-bold text-gray-800 mb-2 text-sm leading-tight">
+                      <span className="text-center">{student.name}</span>
+                    </h3>
                     
-                    {/* Reset button for custom avatars */}
-                    {student.hasCustomAvatar && isConnected && (
+                    {/* Points Display - Large and Prominent */}
+                    <div className="bg-gray-50 rounded-lg p-2 mb-2">
+                      <div className="text-xl font-bold text-gray-800">
+                        {student.points}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        points
+                      </div>
+                    </div>
+                    
+                    {/* Minimal Control Buttons */}
+                    <div className="flex gap-1 justify-center">
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          resetToDefaultAvatar(index);
-                        }}
-                        className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center"
-                        title="Reset to default avatar"
-                        disabled={false}
+                        onClick={() => updatePoints(index, -1)}
+                        disabled={student.points === 0 || !isConnected}
+                        className="w-6 h-6 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:bg-gray-300 flex items-center justify-center transition-colors duration-200"
                       >
-                        ×
+                        <Minus size={10} />
                       </button>
-                    )}
-                    
-                    {/* Small Points Display - positioned over avatar */}
-                    <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-white border-2 border-gray-200 rounded-full px-2 py-1 shadow-sm">
-                      <span className="text-xs font-medium text-gray-600">
-                        {student.points}/20
-                      </span>
+                      
+                      <button
+                        onClick={() => updatePoints(index, 1)}
+                        disabled={student.points === 20 || !isConnected}
+                        className="w-6 h-6 bg-green-500 text-white rounded-full hover:bg-green-600 disabled:bg-gray-300 flex items-center justify-center transition-colors duration-200"
+                      >
+                        <Plus size={10} />
+                      </button>
                     </div>
                   </div>
-                  
-                  <h3 className="font-bold text-gray-800 mb-3 text-lg leading-tight px-1 min-h-[3rem] flex items-center justify-center">
-                    <span className="text-center">{student.name}</span>
-                  </h3>
-                  
-                  {/* Participation Lights */}
-                  <div className="flex justify-center gap-1 mb-4">
-                    {renderLights(student.points)}
-                  </div>
-                  
-                  {/* Control Buttons */}
-                  <div className="flex gap-2 justify-center mt-2">
+                ) : (
+                  /* Normal Mode - Full Cards */
+                  <div 
+                    key={student.id} 
+                    data-student-index={index}
+                    className={`bg-white rounded-lg shadow-md p-6 text-center relative group transition-all duration-300 ${
+                      selectedStudentIndex === index 
+                        ? 'ring-4 ring-purple-400 ring-opacity-75 bg-purple-50 shadow-lg transform scale-105' 
+                        : 'hover:shadow-lg'
+                    }`}
+                  >
+                    {/* Selection Indicator */}
+                    {selectedStudentIndex === index && (
+                      <div className="absolute -top-2 -right-2 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg animate-pulse">
+                        <Target size={16} />
+                      </div>
+                    )}
+                    
+                    {/* Delete Button */}
                     <button
-                      onClick={() => updatePoints(index, -1)}
-                      disabled={student.points === 0 || !isConnected}
-                      className="w-10 h-10 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:bg-gray-300 flex items-center justify-center transition-colors duration-200"
+                      onClick={() => setShowDeleteConfirm(index)}
+                      disabled={!isConnected}
+                      className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:bg-gray-300 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Delete student"
                     >
-                      <Minus size={16} />
+                      <Trash2 size={12} />
                     </button>
                     
-                    <button
-                      onClick={() => updatePoints(index, 1)}
-                      disabled={student.points === 20 || !isConnected}
-                      className="w-10 h-10 bg-green-500 text-white rounded-full hover:bg-green-600 disabled:bg-gray-300 flex items-center justify-center transition-colors duration-200"
-                    >
-                      <Plus size={16} />
-                    </button>
+                    {/* Profile Picture with Upload */}
+                    <div className="relative group mb-4">
+                      <img
+                        src={student.avatar}
+                        alt={student.name}
+                        className="w-24 h-24 rounded-full mx-auto bg-gray-100 object-cover shadow-md"
+                      />
+                      
+                      {/* Upload overlay - appears on hover */}
+                      {isConnected && (
+                        <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                          <Camera size={24} className="text-white" />
+                        </div>
+                      )}
+                      
+                      {/* Hidden file input */}
+                      {isConnected && (
+                        <input
+                          ref={el => fileInputRefs.current[student.id] = el}
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => uploadProfilePic(index, e)}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          disabled={false}
+                        />
+                      )}
+                      
+                      {/* Reset button for custom avatars */}
+                      {student.hasCustomAvatar && isConnected && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            resetToDefaultAvatar(index);
+                          }}
+                          className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center"
+                          title="Reset to default avatar"
+                          disabled={false}
+                        >
+                          ×
+                        </button>
+                      )}
+                      
+                      {/* Small Points Display - positioned over avatar */}
+                      <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 bg-white border-2 border-gray-200 rounded-full px-2 py-1 shadow-sm">
+                        <span className="text-xs font-medium text-gray-600">
+                          {student.points}/20
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <h3 className="font-bold text-gray-800 mb-3 text-lg leading-tight px-1 min-h-[3rem] flex items-center justify-center">
+                      <span className="text-center">{student.name}</span>
+                    </h3>
+                    
+                    {/* Participation Lights */}
+                    <div className="flex justify-center gap-1 mb-4">
+                      {renderLights(student.points)}
+                    </div>
+                    
+                    {/* Control Buttons */}
+                    <div className="flex gap-2 justify-center mt-2">
+                      <button
+                        onClick={() => updatePoints(index, -1)}
+                        disabled={student.points === 0 || !isConnected}
+                        className="w-10 h-10 bg-red-500 text-white rounded-full hover:bg-red-600 disabled:bg-gray-300 flex items-center justify-center transition-colors duration-200"
+                      >
+                        <Minus size={16} />
+                      </button>
+                      
+                      <button
+                        onClick={() => updatePoints(index, 1)}
+                        disabled={student.points === 20 || !isConnected}
+                        className="w-10 h-10 bg-green-500 text-white rounded-full hover:bg-green-600 disabled:bg-gray-300 flex items-center justify-center transition-colors duration-200"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )
               ))}
             </div>
 
